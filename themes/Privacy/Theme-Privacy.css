@@ -1,0 +1,37 @@
+/* Blurring the image and video previews in scene, gallery, and other cards */
+.scene-card-preview, 
+.gallery-card-image, 
+.tag-card-image, 
+.image-card-preview,
+.scene-card-preview.portrait .scene-card-preview-image, 
+.scene-card-preview.portrait .scene-card-preview-video, 
+.scene-marker-card-preview.portrait .scene-card-preview-image, 
+.scene-marker-card-preview.portrait .scene-card-preview-video, 
+.gallery-card-preview.portrait .scene-card-preview-image, 
+.gallery-card-preview.portrait .scene-card-preview-video {
+    height: auto;
+    width: 100%;
+    filter: blur(25px); /* Adjust the blur radius */
+    object-fit: contain;
+}
+
+/* Blurring studio overlay images */
+.studio-overlay, /* If there's a studio overlay container */
+.studio-overlay img {
+    filter: blur(25px);  /* Apply blur to all images inside studio overlay */
+    object-fit: contain; /* Maintain aspect ratio */
+}
+
+/* Blurring images */
+& img {
+    margin: 0.1rem;
+    height: auto;
+    max-height: var(--image-size);
+    min-height: unset;
+    width: 100%;
+    max-width: var(--image-size);
+    min-width: unset;
+    object-fit: contain;
+    object-position: center;
+    filter: blur(25px); /* Apply blur to the images */
+}

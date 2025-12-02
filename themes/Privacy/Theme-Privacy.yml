@@ -1,0 +1,6 @@
+name: Theme - Privacy
+description: Blurs and hides sensitive info
+version: 1.0.0
+ui:
+  css:
+    - Theme-Privacy.css

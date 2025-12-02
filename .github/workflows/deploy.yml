@@ -1,0 +1,40 @@
+# derived from:
+# https://github.com/7dJx1qP/stash-plugins/blob/main/.github/workflows/deploy.yml
+
+name: Deploy repository to Github Pages
+
+on:
+  push:
+    branches: [ main ]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout main
+      uses: actions/checkout@v2
+      with:
+        path: main
+        ref: main
+        fetch-depth: '0'
+    - run: |
+        cd main
+        ./build_site.sh ../_site/main
+    
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
