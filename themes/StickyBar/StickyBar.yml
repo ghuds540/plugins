@@ -1,0 +1,6 @@
+name: StickyBar
+description: Makes the Images tab sort/edit bar sticky.
+version: 1.0.0
+ui:
+  css:
+    - StickyBar.css

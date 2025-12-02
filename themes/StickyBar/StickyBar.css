@@ -1,0 +1,8 @@
+.filtered-list-toolbar.btn-toolbar {
+    position: sticky;
+    top: 45px;
+    background-color: var(--primary-1);
+    width: 100%;
+    z-index: 1000;
+    padding: 5px 0;
+}
