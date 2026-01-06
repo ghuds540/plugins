@@ -122,3 +122,7 @@
 .badge-pill {
   padding: 0.25rem 0.6rem;
 }
+
+.sidebar-pane .sidebar {
+  background-color: var(--primary-1);
+}

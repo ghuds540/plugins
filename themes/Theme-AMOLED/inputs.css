@@ -421,9 +421,11 @@ div.react-datepicker {
 }
 
 /* scene/studio filter buttons */
-.filtered-list-toolbar.btn-toolbar,
+.filtered-list-toolbar.btn-toolbar {
+  background-color: var(--primary-1);
+}
+
 .pagination {
-  background-color: var(--primary-2);
   .btn {
     border-left: 0;
     border-right: 0;

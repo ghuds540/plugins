@@ -1,6 +1,6 @@
 name: Theme - AMOLED
 description: AMOLED Theme for Stash
-version: 0.1.0
+version: 0.1.1
 ui:
   css:
     - index.css
