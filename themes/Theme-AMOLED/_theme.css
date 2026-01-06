@@ -1,0 +1,169 @@
+@font-face {
+  font-family: "Outfit";
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/Outfit-VariableFont_wght.woff2") format("woff2");
+}
+
+.light,
+.light-theme {
+  /* Radix-UI Colors: mauve */
+  --primary-1: #fdfcfd;
+  --primary-2: #faf9fb;
+  --primary-3: #f2eff3;
+  --primary-4: #eae7ec;
+  --primary-5: #e3dfe6;
+  --primary-6: #dbd8e0;
+  --primary-7: #d0cdd7;
+  --primary-8: #bcbac7;
+  --primary-9: #8e8c99;
+  --primary-10: #84828e;
+  --primary-11: #65636d;
+  --primary-12: #211f26;
+  --primary-a1: #55005503;
+  --primary-a2: #2b005506;
+  --primary-a3: #30004010;
+  --primary-a4: #20003618;
+  --primary-a5: #20003820;
+  --primary-a6: #14003527;
+  --primary-a7: #10003332;
+  --primary-a8: #08003145;
+  --primary-a9: #05001d73;
+  --primary-a10: #0500197d;
+  --primary-a11: #0400119c;
+  --primary-a12: #020008e0;
+
+  /* Radix-UI Colors: green */
+  --success-1: #fbfefc;
+  --success-2: #f4fbf6;
+  --success-3: #e6f6eb;
+  --success-4: #d6f1df;
+  --success-5: #c4e8d1;
+  --success-6: #adddc0;
+  --success-7: #8eceaa;
+  --success-8: #5bb98b;
+  --success-9: #30a46c;
+  --success-10: #2b9a66;
+  --success-11: #218358;
+  --success-12: #193b2d;
+
+  /* Radix-UI Colors: red */
+  --danger-1: #fffcfc;
+  --danger-2: #fff7f7;
+  --danger-3: #feebec;
+  --danger-4: #ffdbdc;
+  --danger-5: #ffcdce;
+  --danger-6: #fdbdbe;
+  --danger-7: #f4a9aa;
+  --danger-8: #eb8e90;
+  --danger-9: #e5484d;
+  --danger-10: #dc3e42;
+  --danger-11: #ce2c31;
+  --danger-12: #641723;
+}
+
+:root,
+.dark,
+.dark-theme {
+  /* AMOLED palette */
+  --primary-1: #000000;
+  --primary-2: #050509;
+  --primary-3: #090a12;
+  --primary-4: #0e1018;
+  --primary-5: #141722;
+  --primary-6: #1b1f30;
+  --primary-7: #232842;
+  --primary-8: #2e3556;
+  --primary-9: #3b4566;
+  --primary-10: #4b567c;
+  --primary-11: #9faad8;
+  --primary-12: #f5f7ff;
+  --primary-a1: rgba(31, 40, 66, 0.05);
+  --primary-a2: rgba(39, 50, 84, 0.09);
+  --primary-a3: rgba(47, 61, 107, 0.14);
+  --primary-a4: rgba(56, 74, 128, 0.2);
+  --primary-a5: rgba(64, 86, 150, 0.26);
+  --primary-a6: rgba(72, 100, 176, 0.32);
+  --primary-a7: rgba(83, 116, 203, 0.4);
+  --primary-a8: rgba(95, 132, 226, 0.52);
+  --primary-a9: rgba(114, 150, 236, 0.64);
+  --primary-a10: rgba(136, 170, 240, 0.72);
+  --primary-a11: rgba(185, 209, 252, 0.86);
+  --primary-a12: rgba(233, 243, 255, 0.95);
+
+  /* AMOLED success */
+  --success-1: #03140b;
+  --success-2: #062015;
+  --success-3: #072a1c;
+  --success-4: #083523;
+  --success-5: #0d412d;
+  --success-6: #135039;
+  --success-7: #186347;
+  --success-8: #1f7b59;
+  --success-9: #23a266;
+  --success-10: #29b471;
+  --success-11: #34d88a;
+  --success-12: #9feec2;
+
+  /* AMOLED danger */
+  --danger-1: #1a0508;
+  --danger-2: #24070c;
+  --danger-3: #350911;
+  --danger-4: #450b16;
+  --danger-5: #560f1d;
+  --danger-6: #6b1424;
+  --danger-7: #881c30;
+  --danger-8: #b62740;
+  --danger-9: #e13a52;
+  --danger-10: #f04c60;
+  --danger-11: #ff8896;
+  --danger-12: #ffd0d8;
+
+  --rating-1-background: rgba(94, 28, 22, 0.5); /* tomato */
+  --rating-2-background: rgba(86, 40, 0, 0.5); /* orange */
+  --rating-3-background: rgba(77, 48, 0, 0.5); /* amber */
+  --rating-4-background: rgba(67, 53, 0, 0.5); /* yellow */
+  --rating-5-background: rgba(51, 68, 35, 0.5); /* lime */
+
+  --black-a1: rgba(0, 0, 0, 0.05);
+  --black-a2: rgba(0, 0, 0, 0.1);
+  --black-a3: rgba(0, 0, 0, 0.15);
+  --black-a4: rgba(0, 0, 0, 0.2);
+  --black-a5: rgba(0, 0, 0, 0.3);
+  --black-a6: rgba(0, 0, 0, 0.4);
+  --black-a7: rgba(0, 0, 0, 0.5);
+  --black-a8: rgba(0, 0, 0, 0.6);
+  --black-a9: rgba(0, 0, 0, 0.7);
+  --black-a10: rgba(0, 0, 0, 0.8);
+  --black-a11: rgba(0, 0, 0, 0.9);
+  --black-a12: rgba(0, 0, 0, 0.95);
+
+  --white-a1: rgba(255, 255, 255, 0.05);
+  --white-a2: rgba(255, 255, 255, 0.1);
+  --white-a3: rgba(255, 255, 255, 0.15);
+  --white-a4: rgba(255, 255, 255, 0.2);
+  --white-a5: rgba(255, 255, 255, 0.3);
+  --white-a6: rgba(255, 255, 255, 0.4);
+  --white-a7: rgba(255, 255, 255, 0.5);
+  --white-a8: rgba(255, 255, 255, 0.6);
+  --white-a9: rgba(255, 255, 255, 0.7);
+  --white-a10: rgba(255, 255, 255, 0.8);
+  --white-a11: rgba(255, 255, 255, 0.9);
+  --white-a12: rgba(255, 255, 255, 0.95);
+
+  --text-3xs: 0.5rem; /* 8px */
+  --text-2xs: 0.625rem; /* 10px */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+  --text-3xl: 1.875rem; /* 30px */
+  --text-4xl: 2.25rem; /* 36px */
+  --text-5xl: 3rem; /* 48px */
+  --text-6xl: 3.75rem; /* 60px */
+  --text-7xl: 4.5rem; /* 72px */
+  --text-8xl: 6rem; /* 96px */
+  --text-9xl: 8rem; /* 128px */
+}

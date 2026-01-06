@@ -1,0 +1,22 @@
+.stats {
+  margin: 0 auto !important;
+  flex-direction: column;
+  max-width: 40ch;
+  margin-bottom: 32px !important;
+
+  .stats-element {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    align-items: baseline;
+
+    .title {
+      font-size: var(--text-base);
+    }
+
+    .heading {
+      font-size: var(--text-base);
+      text-transform: capitalize;
+    }
+  }
+}

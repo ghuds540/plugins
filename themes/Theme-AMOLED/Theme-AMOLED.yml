@@ -1,0 +1,26 @@
+name: Theme - AMOLED
+description: AMOLED Theme for Stash
+version: 0.1.0
+ui:
+  css:
+    - index.css
+    - _theme.css
+    - _scrollbars.css
+    - scenes.css
+    - shared.css
+    - settings.css
+    - player.css
+    - inputs.css
+    - modal.css
+    - stats.css
+    - markers-wall.css
+    - popover.css
+    - studio.css
+    - nav-bar.css
+    - scene-tagger.css
+    - studio-performer-tagger.css
+    - skeleton.css
+  assets:
+    /: ./assets
+  javascript:
+    - reset-scrollbars.js
