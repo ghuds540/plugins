@@ -1,0 +1,42 @@
+name: Realbooru.com
+
+# NO AUTHENTICATION REQUIRED
+# Realbooru.com API is public - no API key needed!
+
+# FILENAME FORMATS SUPPORTED:
+# - rb_{POST_ID}_optional_name.{ext} (e.g., rb_969688_artist.jpg)
+# - {md5_hash}.{ext} (e.g., 323df5c5784c312458abbfa383c46045.jpg)
+
+# Scrape scenes (videos) by file path
+sceneByFragment:
+  action: script
+  script:
+    - python
+    - realboorucom.py
+
+# Scrape images by file path
+imageByFragment:
+  action: script
+  script:
+    - python
+    - realboorucom.py
+
+# Optional: Manual scraping by URL (if needed later)
+# sceneByURL:
+#   - action: script
+#     url:
+#       - https://realbooru.com/index.php?page=post
+#     script: realboorucom.py
+
+# imageByURL:
+#   - action: script
+#     url:
+#       - https://realbooru.com/index.php?page=post
+#     script: realboorucom.py
+
+# Driver configuration for API requests
+driver:
+  useCDP: false
+  headers:
+    - Key: User-Agent
+      Value: stashapp/stash scraper (realbooru.com)
