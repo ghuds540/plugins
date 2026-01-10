@@ -68,10 +68,10 @@ buildPlugin()
     echo "" >> "$outdir"/index.yml
 }
 
-find ./plugins -mindepth 1 -name *.yml | sort | while read file; do
+find ./plugins -mindepth 1 -name "*.yml" | sort | while read file; do
     buildPlugin "$file"
 done
-find ./themes -mindepth 1 -name *.yml | sort | while read file; do
+find ./themes -mindepth 1 -name "*.yml" | sort | while read file; do
     buildPlugin "$file"
 done
 
@@ -140,7 +140,7 @@ for f in ./scrapers/*.yml; do
     buildScraper "$f"
 done
 
-find ./scrapers/ -mindepth 2 -name *.yml -print0 | while read -d $'\0' f; do
+find ./scrapers/ -mindepth 2 -name "*.yml" -print0 | while read -d $'\0' f; do
     buildScraper "$f"
 done
 
