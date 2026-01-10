@@ -248,7 +248,7 @@ def map_to_stashapp(post_data, categorized_tags, md5_hash=None):
 
     Stashapp expects JSON with fields:
         - title: string
-        - url: string (link to post)
+        - urls: [string] (array of links)
         - performers: [{"name": string}]
         - studio: {"name": string}
         - tags: [{"name": string}]
@@ -262,11 +262,11 @@ def map_to_stashapp(post_data, categorized_tags, md5_hash=None):
     if post_data.get("title"):
         result["title"] = post_data["title"]
 
-    # URL - reconstruct post URL from ID or provide md5 search URL
+    # URLs - reconstruct post URL from ID or provide md5 search URL
     if post_data.get("id"):
-        result["url"] = f"https://rule34.xxx/index.php?page=post&s=view&id={post_data['id']}"
+        result["urls"] = [f"https://rule34.xxx/index.php?page=post&s=view&id={post_data['id']}"]
     elif md5_hash:
-        result["url"] = f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"
+        result["urls"] = [f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"]
 
     # Performers from character tags
     if categorized_tags["characters"]:
@@ -374,7 +374,7 @@ def main():
         post_data = parse_api_response(xml_response)
         if not post_data:
             log("No matching post found - returning md5 search URL")
-            result = {"url": f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"}
+            result = {"urls": [f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"]}
             print(json.dumps(result))
             return
 

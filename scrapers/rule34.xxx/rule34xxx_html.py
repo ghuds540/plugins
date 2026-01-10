@@ -337,11 +337,11 @@ def map_to_stashapp(post_id, metadata, categorized_tags, md5_hash=None):
     """Map scraped data to Stashapp format"""
     result = {}
 
-    # URL - link to specific post or md5 search
+    # URLs - link to specific post or md5 search
     if post_id:
-        result["url"] = f"https://rule34.xxx/index.php?page=post&s=view&id={post_id}"
+        result["urls"] = [f"https://rule34.xxx/index.php?page=post&s=view&id={post_id}"]
     elif md5_hash:
-        result["url"] = f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"
+        result["urls"] = [f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"]
 
     # Performers from characters
     if categorized_tags["characters"]:
@@ -475,7 +475,7 @@ def main():
         elif md5_hash:
             # No post found, but we have md5 - return just the search URL
             log("No post found, returning md5 search URL only")
-            result = {"url": f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"}
+            result = {"urls": [f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"]}
         else:
             log("No post_id or md5_hash available")
             print(json.dumps({}))
