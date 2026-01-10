@@ -211,6 +211,10 @@ button.btn.favorite-button {
     .reload-button.btn {
       border-bottom-right-radius: 0.25rem;
       border-top-right-radius: 0.25rem;
+      
+      svg {
+        color: var(--primary-12);
+      }
     }
   }
 }
