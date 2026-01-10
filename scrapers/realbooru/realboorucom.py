@@ -39,6 +39,57 @@ def log(message):
     """Log to stderr so it doesn't interfere with JSON output"""
     print(f"[Realbooru.com] {message}", file=sys.stderr)
 
+def is_voice_actor(artist_name):
+    """
+    Detect if an artist name indicates they are a voice actor.
+
+    Patterns detected:
+    - Contains "audio" (e.g., "evilaudio")
+    - Contains "voice" (e.g., "voiceactor", "voice_actor")
+
+    Args:
+        artist_name: Artist name to check
+
+    Returns: True if appears to be a voice actor
+    """
+    name_lower = artist_name.lower()
+
+    # Check for audio in name
+    if 'audio' in name_lower:
+        return True
+
+    # Check for voice-related terms
+    if 'voice' in name_lower:
+        return True
+
+    return False
+
+def separate_voice_actors(artists):
+    """
+    Separate voice actors from regular artists.
+
+    Args:
+        artists: List of artist names
+
+    Returns: Tuple of (non_va_artists, va_artists)
+    """
+    if not artists:
+        return [], []
+
+    non_va = []
+    va = []
+
+    for artist in artists:
+        if is_voice_actor(artist):
+            va.append(artist)
+        else:
+            non_va.append(artist)
+
+    if va:
+        log(f"Separated {len(va)} voice actor(s) from {len(non_va)} artist(s)")
+
+    return non_va, va
+
 def extract_post_id_from_filename(file_path):
     """
     Extract post ID from filename with format: rb_{POST_ID}_optional_name.{ext}
@@ -262,34 +313,46 @@ def map_to_stashapp(post_data, categorized_tags):
     if post_data.get("id"):
         result["urls"] = [f"https://realbooru.com/index.php?page=post&s=view&id={post_data['id']}"]
 
-    # Performers from model tags
+    # Separate voice actors from regular artists
+    regular_artists = categorized_tags.get("artists", [])
+    voice_actors = []
+    if regular_artists:
+        regular_artists, voice_actors = separate_voice_actors(regular_artists)
+
+    # Performers from model tags + voice actors
+    all_performers = []
     if categorized_tags.get("models"):
-        result["performers"] = [{"name": model} for model in categorized_tags["models"]]
-        log(f"Mapped {len(categorized_tags['models'])} models to performers")
+        all_performers.extend(categorized_tags["models"])
+    if voice_actors:
+        all_performers.extend(voice_actors)
 
-    # Studio from first artist (Stashapp only supports one studio)
-    if categorized_tags.get("artists"):
-        result["studio"] = {"name": categorized_tags["artists"][0]}
-        log(f"Mapped artist '{categorized_tags['artists'][0]}' to studio")
+    if all_performers:
+        result["performers"] = [{"name": performer} for performer in all_performers]
+        log(f"Mapped {len(all_performers)} performers ({len(categorized_tags.get('models', []))} models + {len(voice_actors)} VAs)")
 
-    # Tags - combine general tags and additional artists (no prefixes)
+    # Studio from first regular (non-VA) artist
+    if regular_artists:
+        result["studio"] = {"name": regular_artists[0]}
+        log(f"Mapped artist '{regular_artists[0]}' to studio")
+
+    # Tags - combine general tags and additional regular artists (no prefixes)
     all_tags = []
 
     # All general tags (includes copyright, series, metadata, general, etc.)
     for tag in categorized_tags.get("general", []):
         all_tags.append({"name": tag})
 
-    # Additional artists (after first) as tags
-    if categorized_tags.get("artists") and len(categorized_tags["artists"]) > 1:
-        for artist in categorized_tags["artists"][1:]:
+    # Additional regular artists (after first) as tags (VAs are already in performers)
+    if len(regular_artists) > 1:
+        for artist in regular_artists[1:]:
             all_tags.append({"name": artist})
 
     # Add "scraped" marker tag if we have any tags/performers/studio
     # (indicates successful scraping)
     has_content = (
         all_tags or
-        categorized_tags.get("models") or
-        categorized_tags.get("artists")
+        all_performers or
+        regular_artists
     )
     if has_content:
         all_tags.append({"name": "[scraped]"})

@@ -35,6 +35,57 @@ def log(message):
     """Log to stderr so it doesn't interfere with JSON output"""
     print(f"[Rule34.xxx HTML] {message}", file=sys.stderr)
 
+def is_voice_actor(artist_name):
+    """
+    Detect if an artist name indicates they are a voice actor.
+
+    Patterns detected:
+    - Contains "audio" (e.g., "evilaudio")
+    - Contains "voice" (e.g., "voiceactor", "voice_actor")
+
+    Args:
+        artist_name: Artist name to check
+
+    Returns: True if appears to be a voice actor
+    """
+    name_lower = artist_name.lower()
+
+    # Check for audio in name
+    if 'audio' in name_lower:
+        return True
+
+    # Check for voice-related terms
+    if 'voice' in name_lower:
+        return True
+
+    return False
+
+def separate_voice_actors(artists):
+    """
+    Separate voice actors from regular artists.
+
+    Args:
+        artists: List of artist names
+
+    Returns: Tuple of (non_va_artists, va_artists)
+    """
+    if not artists:
+        return [], []
+
+    non_va = []
+    va = []
+
+    for artist in artists:
+        if is_voice_actor(artist):
+            va.append(artist)
+        else:
+            non_va.append(artist)
+
+    if va:
+        log(f"Separated {len(va)} voice actor(s) from {len(non_va)} artist(s)")
+
+    return non_va, va
+
 def load_credentials():
     """Load API credentials from environment variables or config file"""
     api_key = os.environ.get("R34_API_KEY")
@@ -343,15 +394,24 @@ def map_to_stashapp(post_id, metadata, categorized_tags, md5_hash=None):
     elif md5_hash:
         result["urls"] = [f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"]
 
-    # Performers from characters
-    if categorized_tags["characters"]:
-        result["performers"] = [{"name": str(char)} for char in categorized_tags["characters"]]
-        log(f"Mapped {len(categorized_tags['characters'])} performers")
+    # Separate voice actors from regular artists
+    regular_artists, voice_actors = separate_voice_actors(categorized_tags["artists"])
 
-    # Studio from first artist
-    if categorized_tags["artists"]:
-        result["studio"] = {"name": str(categorized_tags["artists"][0])}
-        log(f"Mapped studio: {categorized_tags['artists'][0]}")
+    # Performers from characters + voice actors
+    all_performers = []
+    if categorized_tags["characters"]:
+        all_performers.extend(categorized_tags["characters"])
+    if voice_actors:
+        all_performers.extend(voice_actors)
+
+    if all_performers:
+        result["performers"] = [{"name": str(performer)} for performer in all_performers]
+        log(f"Mapped {len(all_performers)} performers")
+
+    # Studio from first regular (non-VA) artist
+    if regular_artists:
+        result["studio"] = {"name": str(regular_artists[0])}
+        log(f"Mapped studio: {regular_artists[0]}")
 
     # Tags
     all_tags = []
@@ -378,8 +438,8 @@ def map_to_stashapp(post_id, metadata, categorized_tags, md5_hash=None):
     # (indicates successful scraping)
     has_content = (
         all_tags or
-        categorized_tags["characters"] or
-        categorized_tags["artists"]
+        all_performers or
+        regular_artists
     )
     if has_content:
         all_tags.append({"name": "[scraped]"})
