@@ -118,11 +118,11 @@ buildScraper()
 
     # write to spec index
     echo "- id: $scraper_id
-    name: $name
-    version: $version
-    date: $updated
-    path: $scraper_id.zip
-    sha256: $(sha256sum "$zipfile" | cut -d' ' -f1)" >> "$outdir"/index.yml
+  name: $name
+  version: $version
+  date: $updated
+  path: $scraper_id.zip
+  sha256: $(sha256sum "$zipfile" | cut -d' ' -f1)" >> "$outdir"/index.yml
 
     # handle dependencies
     if [ ! -z "$dep" ]; then
