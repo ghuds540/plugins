@@ -1,6 +1,5 @@
 name: Bulk Image Scrape
-requires:
-  - PythonDepManager
+# requires: PythonDepManager 
 description: Apply an image scraper to all images
 version: 0.3.3
 url: https://github.com/stashapp/CommunityScripts/
