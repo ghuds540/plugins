@@ -470,14 +470,26 @@ def main():
                 print(json.dumps({}))
                 return
 
+            # Check if we actually got any meaningful tags
+            has_tags = any([
+                categorized_tags.get("characters"),
+                categorized_tags.get("artists"),
+                categorized_tags.get("copyrights"),
+                categorized_tags.get("general"),
+                categorized_tags.get("meta")
+            ])
+
+            if not has_tags:
+                log("Post found but no tags successfully extracted - returning empty to avoid md5 filename pollution")
+                print(json.dumps({}))
+                return
+
             # Map to Stashapp format with full data
             result = map_to_stashapp(post_id, metadata, categorized_tags, md5_hash)
-        elif md5_hash:
-            # No post found, but we have md5 - return just the search URL
-            log("No post found, returning md5 search URL only")
-            result = {"urls": [f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"]}
         else:
-            log("No post_id or md5_hash available")
+            # No post found - return empty instead of search URL
+            # This prevents tagging files with md5 filenames from other boorus
+            log("No post found for md5 hash - returning empty to avoid pollution from md5 filenames")
             print(json.dumps({}))
             return
 

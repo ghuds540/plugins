@@ -373,13 +373,25 @@ def main():
         # Parse response
         post_data = parse_api_response(xml_response)
         if not post_data:
-            log("No matching post found - returning md5 search URL")
-            result = {"urls": [f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"]}
-            print(json.dumps(result))
+            log("No matching post found - skipping (no tags resolved)")
+            print(json.dumps({}))
             return
 
         # Categorize tags
         categorized_tags = parse_tags_string(post_data["tags"])
+        
+        # Check if we got any meaningful tags
+        has_tags = (
+            categorized_tags["characters"] or 
+            categorized_tags["artists"] or 
+            categorized_tags["copyrights"] or 
+            categorized_tags["general"] or 
+            categorized_tags["meta"]
+        )
+        if not has_tags:
+            log("Post found but no tags resolved - skipping")
+            print(json.dumps({}))
+            return
         log(f"Categorized tags: {categorized_tags}")
 
         # Map to Stashapp format
