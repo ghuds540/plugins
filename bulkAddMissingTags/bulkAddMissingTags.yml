@@ -1,0 +1,11 @@
+name: Bulk Add Missing Tags
+description: Adds a "Add All Missing" button to the metadata scraping tagger view to add all missing tags at once without manually clicking + or link button on each one. Works in scene tagger, image tagger, and all scraping dialogs.
+version: 1.0
+url: https://github.com/ghuds540/plugins
+ui:
+  requires:
+    - CommunityScriptsUILibrary
+  javascript:
+    - bulkAddMissingTags.js
+  css:
+    - bulkAddMissingTags.css
