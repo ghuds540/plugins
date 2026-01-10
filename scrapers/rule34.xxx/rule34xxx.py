@@ -14,10 +14,10 @@ HOW IT WORKS:
 
 TAG MAPPING:
 - character tags -> Performers
-- artist tags -> Studio (first) + artist:{name} tags
-- copyright tags -> series:{name} tags
-- general tags -> {name} tags
-- meta tags -> meta:{name} tags
+- artist tags -> Studio only (not tagged)
+- copyright tags -> Tags
+- general tags -> Tags
+- meta tags -> Tags
 
 CONTINUATION NOTES:
 - API endpoint: https://api.rule34.xxx/index.php?page=dapi&s=post&q=index
@@ -271,36 +271,29 @@ def map_to_stashapp(post_data, categorized_tags):
         result["performers"] = [{"name": str(char)} for char in categorized_tags["characters"]]
 
     # Studio from first artist
-    studio_artist = None
     if categorized_tags["artists"]:
-        studio_artist = categorized_tags["artists"][0]
-        result["studio"] = {"name": str(studio_artist)}
+        result["studio"] = {"name": str(categorized_tags["artists"][0])}
 
-    # Tags - combine all types with appropriate prefixes
+    # Tags - combine all types
     all_tags = []
 
     # General tags
     for tag in categorized_tags["general"]:
         all_tags.append({"name": str(tag)})
 
-    # Artist tags with artist: prefix (excluding the one used as studio)
-    for artist in categorized_tags["artists"]:
-        if artist != studio_artist:
-            all_tags.append({"name": f"artist:{str(artist)}"})
-
-    # Copyright/series tags with series: prefix
+    # Copyright/series tags
     for series in categorized_tags["copyrights"]:
-        all_tags.append({"name": f"series:{str(series)}"})
+        all_tags.append({"name": str(series)})
 
-    # Meta tags with meta: prefix
+    # Meta tags
     for meta in categorized_tags["meta"]:
-        all_tags.append({"name": f"meta:{str(meta)}"})
+        all_tags.append({"name": str(meta)})
 
     # Add rating as tag
     if post_data.get("rating"):
         rating_map = {"s": "safe", "q": "questionable", "e": "explicit"}
         rating = rating_map.get(post_data["rating"], post_data["rating"])
-        all_tags.append({"name": f"rating:{rating}"})
+        all_tags.append({"name": rating})
 
     # Add scraper success tag
     all_tags.append({"name": "scraped"})
