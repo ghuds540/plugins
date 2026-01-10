@@ -1,0 +1,44 @@
+name: rule34xxx
+displayName: Rule34.xxx
+description: Scrapes metadata from rule34.xxx using md5 filename matching with tag categorization
+version: 1.0.0
+
+# AUTHENTICATION REQUIRED
+# Set these environment variables before running Stashapp:
+#   R34_API_KEY=your_api_key
+#   R34_USER_ID=your_user_id
+# Or create a config file: rule34xxx_config.json in the same directory
+
+# TWO VERSIONS AVAILABLE (see SCRAPER_COMPARISON.md):
+# - rule34xxx_html.py (recommended): Full tag categorization, performers, studio
+# - rule34xxx.py (faster): Basic tagging only
+
+# Scrape scenes (videos) by file path - extracts md5 from filename
+sceneByFragment:
+  - action: script
+    script: rule34xxx_html.py
+
+# Scrape images by file path - extracts md5 from filename
+imageByFragment:
+  - action: script
+    script: rule34xxx_html.py
+
+# Optional: Manual scraping by URL (if needed later)
+# sceneByURL:
+#   - action: script
+#     url:
+#       - https://rule34.xxx/index.php?page=post
+#     script: rule34xxx.py
+
+# imageByURL:
+#   - action: script
+#     url:
+#       - https://rule34.xxx/index.php?page=post
+#     script: rule34xxx.py
+
+# Driver configuration for API requests
+driver:
+  useCDP: false
+  headers:
+    - Key: User-Agent
+      Value: stashapp/stash scraper (rule34.xxx)
