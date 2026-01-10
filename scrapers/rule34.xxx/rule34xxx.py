@@ -14,10 +14,10 @@ HOW IT WORKS:
 
 TAG MAPPING:
 - character tags -> Performers
-- artist tags -> Studio (first) + r34:artist:{name} tags
-- copyright tags -> r34:series:{name} tags
-- general tags -> r34:{name} tags
-- meta tags -> r34:meta:{name} tags
+- artist tags -> Studio (first) + artist:{name} tags
+- copyright tags -> series:{name} tags
+- general tags -> {name} tags
+- meta tags -> meta:{name} tags
 
 CONTINUATION NOTES:
 - API endpoint: https://api.rule34.xxx/index.php?page=dapi&s=post&q=index
@@ -268,42 +268,42 @@ def map_to_stashapp(post_data, categorized_tags):
 
     # Performers from character tags
     if categorized_tags["characters"]:
-        result["performers"] = [{"name": f"r34:{str(char)}"} for char in categorized_tags["characters"]]
+        result["performers"] = [{"name": str(char)} for char in categorized_tags["characters"]]
 
     # Studio from first artist
     studio_artist = None
     if categorized_tags["artists"]:
         studio_artist = categorized_tags["artists"][0]
-        result["studio"] = {"name": f"r34:{str(studio_artist)}"}
+        result["studio"] = {"name": str(studio_artist)}
 
     # Tags - combine all types with appropriate prefixes
     all_tags = []
 
-    # General tags with r34: prefix
+    # General tags
     for tag in categorized_tags["general"]:
-        all_tags.append({"name": f"r34:{str(tag)}"})
+        all_tags.append({"name": str(tag)})
 
-    # Artist tags with r34:artist: prefix (excluding the one used as studio)
+    # Artist tags with artist: prefix (excluding the one used as studio)
     for artist in categorized_tags["artists"]:
         if artist != studio_artist:
-            all_tags.append({"name": f"r34:artist:{str(artist)}"})
+            all_tags.append({"name": f"artist:{str(artist)}"})
 
-    # Copyright/series tags with r34:series: prefix
+    # Copyright/series tags with series: prefix
     for series in categorized_tags["copyrights"]:
-        all_tags.append({"name": f"r34:series:{str(series)}"})
+        all_tags.append({"name": f"series:{str(series)}"})
 
-    # Meta tags with r34:meta: prefix
+    # Meta tags with meta: prefix
     for meta in categorized_tags["meta"]:
-        all_tags.append({"name": f"r34:meta:{str(meta)}"})
+        all_tags.append({"name": f"meta:{str(meta)}"})
 
     # Add rating as tag
     if post_data.get("rating"):
         rating_map = {"s": "safe", "q": "questionable", "e": "explicit"}
         rating = rating_map.get(post_data["rating"], post_data["rating"])
-        all_tags.append({"name": f"r34:rating:{rating}"})
+        all_tags.append({"name": f"rating:{rating}"})
 
     # Add scraper success tag
-    all_tags.append({"name": "r34scraper:scraped"})
+    all_tags.append({"name": "scraped"})
 
     if all_tags:
         result["tags"] = all_tags
@@ -337,7 +337,7 @@ def main():
         api_key, user_id = load_credentials()
         if not api_key or not user_id:
             log("ERROR: Missing API credentials. Cannot query rule34.xxx")
-            print(json.dumps({"tags": [{"name": "r34:auth-required"}]}))
+            print(json.dumps({}))
             return
 
         # Read input from Stashapp
@@ -359,7 +359,7 @@ def main():
         
         if not file_path:
             log("No filename/path/url/title in input")
-            print(json.dumps({"tags": [{"name": "r34:lookup-failed"}]}))
+            print(json.dumps({}))
             return
 
         # Extract md5 from filename
@@ -368,21 +368,21 @@ def main():
 
         if not md5_hash:
             log("Could not extract md5 from filename")
-            print(json.dumps({"tags": [{"name": "r34:lookup-failed"}]}))
+            print(json.dumps({}))
             return
 
         # Query API with authentication
         xml_response = query_rule34_api(md5_hash, api_key, user_id)
         if not xml_response:
             log("API query failed")
-            print(json.dumps({"tags": [{"name": "r34:lookup-failed"}]}))
+            print(json.dumps({"tags": [{"name": "lookup-failed"}]}))
             return
 
         # Parse response
         post_data = parse_api_response(xml_response)
         if not post_data:
             log("No matching post found")
-            print(json.dumps({"tags": [{"name": "r34:lookup-failed"}]}))
+            print(json.dumps({"tags": [{"name": "lookup-failed"}]}))
             return
 
         # Categorize tags
@@ -401,7 +401,7 @@ def main():
         import traceback
         traceback.print_exc(file=sys.stderr)
         # Return minimal data on error
-        print(json.dumps({"tags": [{"name": "r34:lookup-failed"}]}))
+        print(json.dumps({}))
 
 if __name__ == "__main__":
     main()
