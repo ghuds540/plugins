@@ -338,8 +338,13 @@ def main():
         input_data = json.load(sys.stdin)
         log(f"Received input: {input_data}")
 
-        # Get file path from fragment input
+        # Extract file path from different input formats
         file_path = input_data.get("path") or input_data.get("url")
+        
+        # For sceneByFragment/imageByFragment, path is in files array
+        if not file_path and "files" in input_data and input_data["files"]:
+            file_path = input_data["files"][0].get("path")
+        
         if not file_path:
             log("No path or url provided in input")
             # Return lookup-failed tag
