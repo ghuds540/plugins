@@ -360,13 +360,13 @@ def main():
         file_path = None
         
         # Try different input fields in order of preference
-        if "files" in input_data and input_data["files"]:
+        if input_data.get("files") and len(input_data["files"]) > 0:
             file_path = input_data["files"][0].get("path")
-        elif "path" in input_data:
+        if not file_path:
             file_path = input_data.get("path")
-        elif "url" in input_data:
-            file_path = input_data.get("url")
-        elif "title" in input_data:
+        if not file_path:
+            file_path = input_data.get("url") 
+        if not file_path:
             file_path = input_data.get("title")
         
         if not file_path:
