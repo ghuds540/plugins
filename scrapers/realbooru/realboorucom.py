@@ -284,6 +284,16 @@ def map_to_stashapp(post_data, categorized_tags):
         for artist in categorized_tags["artists"][1:]:
             all_tags.append({"name": artist})
 
+    # Add "scraped" marker tag if we have any tags/performers/studio
+    # (indicates successful scraping)
+    has_content = (
+        all_tags or
+        categorized_tags.get("models") or
+        categorized_tags.get("artists")
+    )
+    if has_content:
+        all_tags.append({"name": "[scraped]"})
+
     if all_tags:
         result["tags"] = all_tags
 

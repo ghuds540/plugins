@@ -297,6 +297,16 @@ def map_to_stashapp(post_data, categorized_tags, md5_hash=None):
         rating = rating_map.get(post_data["rating"], post_data["rating"])
         all_tags.append({"name": rating})
 
+    # Add "scraped" marker tag if we have any content
+    # (indicates successful scraping)
+    has_content = (
+        all_tags or
+        categorized_tags["characters"] or
+        categorized_tags["artists"]
+    )
+    if has_content:
+        all_tags.append({"name": "[scraped]"})
+
     if all_tags:
         result["tags"] = all_tags
 
