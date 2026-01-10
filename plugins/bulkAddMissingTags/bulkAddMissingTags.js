@@ -124,7 +124,7 @@
    */
   async function addAllMissingTags() {
     const missingTags = getMissingTags();
-    
+
     if (missingTags.length === 0) {
       alert('No missing tags found.');
       return;
@@ -134,7 +134,7 @@
     if (pluginConfig.requireConfirmation) {
       const tagNames = missingTags.map(t => t.name).join(', ');
       const confirmMessage = `Add all ${missingTags.length} missing tag(s)?\n\nTags: ${tagNames}`;
-      
+
       if (!confirm(confirmMessage)) {
         return;
       }
@@ -143,21 +143,48 @@
     // Track progress
     let successCount = 0;
     let failCount = 0;
+    let createdCount = 0;
 
+    // PHASE 1: Pre-create all unique tags to avoid duplicate creation errors
+    // Collect unique tag names
+    const uniqueTagNames = [...new Set(missingTags.map(t => t.name))];
+
+    console.log(`Pre-creating ${uniqueTagNames.length} unique tag(s)...`);
+
+    // Create all unique tags first
+    for (const tagName of uniqueTagNames) {
+      try {
+        const tagId = await getOrCreateTagId(tagName);
+        if (tagId) {
+          createdCount++;
+          console.log(`Ensured tag exists: "${tagName}" (ID: ${tagId})`);
+        } else {
+          console.warn(`Failed to create/find tag: "${tagName}"`);
+        }
+      } catch (error) {
+        console.error(`Error creating tag "${tagName}":`, error);
+      }
+    }
+
+    // Wait for UI to update with the newly created tags
+    // After tags are created, the "create" buttons will change to "link" buttons
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // PHASE 2: Click the buttons to link tags to items
     // Process each missing tag
     for (const tag of missingTags) {
       try {
-        // Find and click the create button on this tag
-        const createButton = tag.element.querySelector('button[title*="Create"], button[title*="create"]');
-        
-        if (createButton) {
-          createButton.click();
+        // Find the button (now should be a link button instead of create)
+        const button = tag.element.querySelector('button[title*="Create"], button[title*="create"], button[title*="Link"], button[title*="link"]');
+
+        if (button) {
+          button.click();
           successCount++;
-          
+
           // Small delay to avoid overwhelming the UI
           await new Promise(resolve => setTimeout(resolve, 100));
         } else {
-          console.warn(`Could not find create button for tag: ${tag.name}`);
+          console.warn(`Could not find button for tag: ${tag.name}`);
           failCount++;
         }
       } catch (error) {
@@ -167,6 +194,7 @@
     }
 
     // Show results
+    console.log(`Created ${createdCount} unique tag(s).`);
     if (successCount > 0) {
       console.log(`Successfully initiated addition of ${successCount} tag(s).`);
     }
