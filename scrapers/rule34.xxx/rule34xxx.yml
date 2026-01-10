@@ -1,7 +1,4 @@
-name: rule34xxx
-displayName: Rule34.xxx
-description: Scrapes metadata from rule34.xxx using md5 filename matching with tag categorization
-version: 1.0.0
+name: Rule34.xxx
 
 # AUTHENTICATION REQUIRED
 # Set these environment variables before running Stashapp:
@@ -15,13 +12,17 @@ version: 1.0.0
 
 # Scrape scenes (videos) by file path - extracts md5 from filename
 sceneByFragment:
-  - action: script
-    script: rule34xxx_html.py
+  action: script
+  script:
+    - python
+    - rule34xxx_html.py
 
 # Scrape images by file path - extracts md5 from filename
 imageByFragment:
-  - action: script
-    script: rule34xxx_html.py
+  action: script
+  script:
+    - python
+    - rule34xxx_html.py
 
 # Optional: Manual scraping by URL (if needed later)
 # sceneByURL:
