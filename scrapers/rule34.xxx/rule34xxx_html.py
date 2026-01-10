@@ -112,6 +112,48 @@ def extract_md5_from_path(file_path):
     
     return None
 
+def get_post_id_from_md5_search(md5_hash):
+    """
+    Scrape search page to find post ID from md5 hash (no API key needed).
+    
+    Uses the public search interface: https://rule34.xxx/index.php?page=post&s=list&tags=md5:HASH
+    Scrapes the search results to extract the post ID.
+    
+    Returns: post_id (string) or None
+    """
+    search_url = f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"
+    log(f"Searching for post by md5 (no auth): {search_url}")
+    
+    try:
+        req = urllib.request.Request(search_url, headers={
+            "User-Agent": "stashapp/stash scraper",
+            "Accept": "text/html"
+        })
+        with urllib.request.urlopen(req, timeout=15) as response:
+            html = response.read().decode('utf-8')
+        
+        # Look for post ID in the search results
+        # Format: <a id="p12345" or href with id=12345
+        patterns = [
+            r'id="p(\d+)"',  # Direct post ID in anchor
+            r'[?&]id=(\d+)',  # ID in URL parameter
+            r'\/index\.php\?page=post&s=view&id=(\d+)'  # Full URL pattern
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, html)
+            if match:
+                post_id = match.group(1)
+                log(f"Found post ID from search: {post_id}")
+                return post_id
+        
+        log(f"No post found in search results for md5:{md5_hash}")
+        return None
+        
+    except Exception as e:
+        log(f"Search page scraping failed: {e}")
+        return None
+
 def get_post_id_from_md5(md5_hash, api_key, user_id):
     """Use API to get post ID from md5 hash"""
     params = API_PARAMS.copy()
@@ -388,18 +430,19 @@ def main():
             if md5_hash:
                 log(f"Extracted md5: {md5_hash}")
                 
-                # Try API lookup if credentials available
-                api_key, user_id = load_credentials()
-                if api_key and user_id:
-                    log("Trying md5 lookup via API")
-                    post_id, metadata = get_post_id_from_md5(md5_hash, api_key, user_id)
-                    if not post_id:
-                        log("No matching post found in API - returning empty")
-                        print(json.dumps({}))
-                        return
-                else:
-                    log("No API credentials available for md5 lookup")
-                    log("TIP: Use r34_{POST_ID}_* filename format to skip API requirement")
+                # Try scraping search page first (no API needed!)
+                log("Trying md5 lookup via search page (no auth required)")
+                post_id = get_post_id_from_md5_search(md5_hash)
+                
+                if not post_id:
+                    # Fall back to API if search failed and credentials available
+                    api_key, user_id = load_credentials()
+                    if api_key and user_id:
+                        log("Search failed, trying API as fallback")
+                        post_id, metadata = get_post_id_from_md5(md5_hash, api_key, user_id)
+                    
+                if not post_id:
+                    log("Could not find post by md5 hash - returning empty")
                     print(json.dumps({}))
                     return
             else:
