@@ -279,27 +279,266 @@ class Rule34WikiScraper:
         return tag_name.strip().lower().replace(" ", "_")
     
     def _clean_description(self, text: str) -> str:
-        """Clean up extracted description text."""
-        # Remove excessive whitespace
-        text = re.sub(r'\s+', ' ', text)
-        # Remove leading/trailing whitespace
+        """Clean up extracted description text.
+        
+        Handles various Rule34 wiki formatting edge cases:
+        - Page headers (Now Viewing, Tag type)
+        - Wiki footers (Other Wiki Information, Last updated)
+        - Boilerplate text (edit notices, locked/unlocked entry messages)
+        - DText formatting artifacts (h4. headers, links)
+        - Related tag dumps that follow descriptions
+        - Site chrome (GDPR consent, pagination)
+        """
+        # First pass: normalize whitespace but preserve line breaks for later processing
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n\s*\n', '\n', text)
         text = text.strip()
+        
         # Remove "edit" links and similar artifacts
         text = re.sub(r'\[edit\]', '', text, flags=re.IGNORECASE)
         
-        # Remove Rule34 wiki page header: "Now Viewing: tagname Tag type: Type"
-        text = re.sub(r'^Now Viewing:\s*\S+\s*Tag type:\s*\w+\s*', '', text, flags=re.IGNORECASE)
+        # ============================================================
+        # Remove page headers
+        # ============================================================
+        # Format: "Now Viewing: tagname Tag type: TypeDescription..." 
+        # We need to remove header but KEEP the description that follows
+        # The description often starts with an article (A, An, The) or proper noun
         
-        # Remove wiki footer: "Other Wiki Information Last updated: ..." to end
+        # First try combined pattern - match known tag types to avoid eating description
+        header_match = re.match(
+            r'^Now Viewing:\s*\S+\s*Tag type:\s*'
+            r'(General|Character|Copyright|Artist|Meta|Ambiguous|Lore)\s*',
+            text,
+            flags=re.IGNORECASE
+        )
+        if header_match:
+            text = text[header_match.end():]
+        else:
+            # Try separate patterns
+            text = re.sub(r'^Now Viewing:\s*\S+\s*', '', text, flags=re.IGNORECASE)
+            # For Tag type, only remove if followed by whitespace to avoid eating content
+            text = re.sub(r'^Tag type:\s*(General|Character|Copyright|Artist|Meta|Ambiguous|Lore)\s+', '', text, flags=re.IGNORECASE)
+            # If no match, try simpler pattern but require space after
+            text = re.sub(r'^Tag type:\s*\w+\s+', '', text, flags=re.IGNORECASE)
+        
+        # ============================================================
+        # Remove wiki footer sections (everything after these markers)
+        # ============================================================
+        # "Other Wiki Information Last updated: ... by user"
         text = re.sub(r'\s*Other Wiki Information\s*Last updated:.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
         
-        # Also handle "This entry is locked..." which sometimes appears
-        text = re.sub(r'\s*This entry is locked.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
+        # Standalone "Last updated" if Other Wiki Information was already removed
+        text = re.sub(r'\s*Last updated:\s*[^.]+\.\s*by\s+\w+.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
         
-        # Remove "View more »" if present
+        # ============================================================
+        # Remove boilerplate edit/lock notices
+        # ============================================================
+        # "This entry is not locked and you can edit it as you see fit."
+        text = re.sub(r'\s*This entry is not locked and you can edit it as you see fit\.?\s*', '', text, flags=re.IGNORECASE)
+        
+        # "This entry is locked..." (various forms)
+        text = re.sub(r'\s*This entry is locked[^.]*\.?\s*', '', text, flags=re.IGNORECASE)
+        
+        # ============================================================
+        # Remove related content markers
+        # ============================================================
+        # "View more »" or "View more >" (related posts section)
         text = re.sub(r'\s*View more\s*[»>]?\s*$', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\s*View more\s*[»>]?\s*', ' ', text, flags=re.IGNORECASE)
         
+        # "There are no images associated with this wiki entry."
+        text = re.sub(r'\s*There are no images associated with this wiki entry\.?\s*', '', text, flags=re.IGNORECASE)
+        
+        # ============================================================
+        # Remove site chrome and cookies
+        # ============================================================
+        # "Reset cookie / GDPR consent" and variations
+        text = re.sub(r'\s*Reset cookie\s*/?\s*GDPR consent\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\s*GDPR consent\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\s*Reset cookie\s*', '', text, flags=re.IGNORECASE)
+        
+        # ============================================================
+        # Remove h4 sections that are not content (navigational/reference sections)
+        # These sections continue until the next h4 or end of text
+        # ============================================================
+        remove_sections = [
+            r'h4\.\s*See also',
+            r'h4\.\s*External links?',
+            r'h4\.\s*Links?',
+            r'h4\.\s*References?',
+            r'h4\.\s*Typical Tags?',
+            r'h4\.\s*Related Tags?',
+        ]
+        
+        for section_pattern in remove_sections:
+            # Remove from section header to next h4 or end
+            text = re.sub(
+                section_pattern + r'.*?(?=h4\.|$)',
+                '',
+                text,
+                flags=re.IGNORECASE | re.DOTALL
+            )
+        
+        # Convert remaining h4 headers to readable format (these are content headers)
+        text = re.sub(r'\bh4\.\s*(Original characters?)\s*:?\s*', 'Original characters: ', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bh4\.\s*(Types?)\s*:?\s*', 'Types: ', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bh4\.\s*(\w+)\s*:?\s*', r'\1: ', text)  # Generic h4 -> "Header: "
+        
+        # ============================================================
+        # Clean up DText link formatting
+        # ============================================================
+        # DText links: "display text":URL or "display text":[URL] or "text":/path?query
+        # Keep only the display text
+        text = re.sub(r'"([^"]+)":\[?(?:https?://)?[^\s\[\]"]+\]?', r'\1', text)
+        text = re.sub(r'"([^"]+)":/[^\s"]+', r'\1', text)
+        
+        # Clean up wiki links: [[link]] or [[link|display]]
+        text = re.sub(r'\[\[([^\]|]+)\|([^\]]+)\]\]', r'\2', text)  # [[link|display]] -> display
+        text = re.sub(r'\[\[([^\]]+)\]\]', r'\1', text)  # [[link]] -> link
+        
+        # Clean up bare URLs and URL-like fragments
+        text = re.sub(r'https?://[^\s<>"]+', '', text)
+        text = re.sub(r'\b\w+\.(?:com|org|net|info|jp|co\.uk)[^\s]*', '', text)  # Domain names
+        
+        # Clean up query string fragments that might remain
+        text = re.sub(r'\[[^\]]*\]', '', text)  # Remove anything in square brackets (likely URL params)
+        text = re.sub(r'=[^\s&]*', '', text)  # Remove =value patterns
+        text = re.sub(r'&\w+', '', text)  # Remove &param patterns
+        text = re.sub(r'\?utf8', '', text)  # Specific cleanup
+        
+        # ============================================================
+        # Remove tag dump sections (lists of related tags after description)
+        # These appear as long strings of underscore_separated_words
+        # ============================================================
+        # Detect and remove sections that look like tag dumps
+        text = self._remove_tag_dumps(text)
+        
+        # ============================================================
+        # Clean up bullet points and list formatting
+        # ============================================================
+        # Convert asterisk bullets to proper bullets
+        text = re.sub(r'\*\s+', '• ', text)  # "* item" -> "• item"
+        text = re.sub(r'^\s*\*\s*', '• ', text, flags=re.MULTILINE)
+        text = re.sub(r'\|\s*\*\s*', ' • ', text)
+        text = re.sub(r'\s*\|\s*', ' ', text)
+        
+        # Clean up remaining asterisks used as separators
+        text = re.sub(r'\*\s*', ', ', text)
+        # Clean up multiple commas
+        text = re.sub(r',\s*,', ',', text)
+        text = re.sub(r':\s*,\s*', ': ', text)  # "Types: , item" -> "Types: item"
+        
+        # Clean up search wildcard patterns that are clearly not prose
+        text = re.sub(r'\b\w+_,\s*', '', text)  # "fuwayu_," leftover
+        text = re.sub(r',\s*_\w+\b', '', text)  # ",_fuwayu" leftover
+        
+        # ============================================================
+        # Final cleanup
+        # ============================================================
+        # Add space before sentences that are mushed together
+        text = re.sub(r'\.([A-Z])', r'. \1', text)  # ".The" -> ". The"
+        
+        # Add space between bullet items that are mushed together
+        text = re.sub(r'•\s*(\w)', r'• \1', text)  # "•item" -> "• item"
+        text = re.sub(r'(\w)•', r'\1 •', text)  # "item•" -> "item •"
+        
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+        
+        # Remove empty parentheses, brackets that might remain
+        text = re.sub(r'\(\s*\)', '', text)
+        text = re.sub(r'\[\s*\]', '', text)
+        text = re.sub(r'\]', '', text)  # Remove any remaining brackets
+        
+        # Clean up multiple punctuation
+        text = re.sub(r'\.{2,}', '.', text)
+        text = re.sub(r'\s+([.,;:!?])', r'\1', text)
+        
+        # Clean up leading/trailing punctuation
+        text = re.sub(r'^[,;:\s•*]+', '', text)
+        text = re.sub(r'[,;:\s•*]+$', '', text)
+        
+        # Remove empty bullet point artifacts
+        text = re.sub(r'•\s*•', '•', text)
+        text = re.sub(r':\s*•\s*$', '', text)  # Remove trailing ": •"
+        
+        # Final trim
         return text.strip()
+    
+    def _remove_tag_dumps(self, text: str) -> str:
+        """Remove sections that appear to be dumps of related tags.
+        
+        Tag dumps are characterized by:
+        - Many words separated by underscores or spaces
+        - Typically lowercase
+        - Often contain common tag patterns (1girls, big_breasts, etc.)
+        - Appear at the end of descriptions
+        """
+        # Common tag dump indicators - if we see these, truncate
+        tag_dump_patterns = [
+            # Common tag prefixes/patterns that indicate a tag dump started
+            r'\b\d+girls?\b',
+            r'\b\d+boys?\b', 
+            r'\bbig_breasts\b',
+            r'\blarge_breasts\b',
+            r'\bhuge_breasts\b',
+            r'\bsmall_breasts\b',
+            r'\bmedium_breasts\b',
+            r'\bblonde_hair\b',
+            r'\bblack_hair\b',
+            r'\bbrown_hair\b',
+            r'\bblue_eyes\b',
+            r'\bgreen_eyes\b',
+            r'\bbrown_eyes\b',
+            r'\bfemale_only\b',
+            r'\bmale_only\b',
+            r'\bsolo_female\b',
+            r'\bsolo_male\b',
+            r'\bnude_female\b',
+            r'\bnude_male\b',
+            r'\bcompletely_nude\b',
+            r'\bhigh_resolution\b',
+            r'\bhighres\b',
+            r'\bhi_res\b',
+            r'\bdigital_media\b',
+            r'\bdigital_art\b',
+            r'\boriginal_character\b',
+            r'\bfemale_focus\b',
+            r'\bmale_focus\b',
+        ]
+        
+        # Build combined pattern
+        combined_pattern = '|'.join(tag_dump_patterns)
+        
+        # Find first occurrence of what looks like a tag dump
+        # Look for a sequence that starts with common tag patterns
+        match = re.search(combined_pattern, text, flags=re.IGNORECASE)
+        
+        if match:
+            # Check if this is actually in a tag dump context
+            # A tag dump typically has multiple tag-like words in sequence
+            pos = match.start()
+            before = text[:pos]
+            after = text[pos:]
+            
+            # Count tag-like patterns in the "after" section
+            tag_count = len(re.findall(r'\b\w+_\w+\b', after[:200]))
+            
+            # If there are many underscore-separated words, it's likely a tag dump
+            if tag_count >= 5:
+                # Truncate at this point, but try to end at a sentence
+                # Look backwards for a good stopping point
+                sentence_end = max(
+                    before.rfind('. '),
+                    before.rfind('.\n'),
+                    before.rfind('.)'),
+                )
+                if sentence_end > len(before) * 0.3:  # Only if we keep at least 30%
+                    return before[:sentence_end + 1].strip()
+                return before.strip()
+        
+        return text
     
     def scrape_tag(self, tag_name: str) -> WikiResult:
         """Scrape description for a single tag from Rule34 wiki."""
@@ -399,64 +638,171 @@ class Rule34WikiScraper:
         return None
     
     def _extract_description(self, soup: BeautifulSoup, tag_name: str) -> Optional[str]:
-        """Extract tag description from parsed wiki page."""
+        """Extract tag description from parsed wiki page.
+        
+        Rule34 wiki pages have a specific structure:
+        - Header: "Now Viewing: tagname" and "Tag type: Type"
+        - Body: The actual description (may include h4 sections, lists, links)
+        - Footer: "Other Wiki Information Last updated: ..."
+        - Below: "This entry is [not] locked..." message
+        - Then: Related images with their tags
+        
+        We need to extract just the body content.
+        """
         
         # Remove known non-content elements first
-        for elem in soup.select("script, style, #header, #navbar, #subnavbar, #paginator, .sidebar"):
+        for elem in soup.select("script, style, #header, #navbar, #subnavbar, #paginator, .sidebar, .notice"):
             elem.decompose()
         
-        # Method 1: Look for wiki body content - Rule34 uses table layouts
-        # The description is usually in a td cell
+        # First, try to find the content div which contains the wiki body
         content_div = soup.find("div", {"id": "content"})
-        if content_div:
-            for td in content_div.find_all("td"):
-                text = td.get_text().strip()
-                
-                # Skip metadata cells
-                if len(text) < 30:
-                    continue
-                if text.startswith("Version"):
-                    continue
-                if "Last updated" in text:
-                    continue
-                if "Recent Changes" in text:
-                    continue
-                if "Reset cookie" in text:
-                    continue
-                    
-                cleaned = self._clean_description(text)
-                if len(cleaned) > 30:
-                    return cleaned
+        if not content_div:
+            return None
+        
+        # The wiki content is typically in a table structure
+        # Try to find the specific cell containing the description
+        
+        # Method 1: Look for the wiki body table cell
+        # The structure often has the header info, then description, then footer
+        best_candidate = None
+        best_score = 0
+        
+        for td in content_div.find_all("td"):
+            text = td.get_text(separator='\n').strip()
+            
+            # Skip very short cells
+            if len(text) < 30:
+                continue
+            
+            # Skip cells that are mostly metadata
+            if text.startswith("Version"):
+                continue
+            if "Recent Changes" in text and len(text.split('\n')) < 5:
+                continue
+            
+            # Score this candidate based on content quality
+            score = self._score_description_candidate(text)
+            
+            if score > best_score:
+                best_score = score
+                best_candidate = text
+        
+        if best_candidate and best_score >= 10:
+            cleaned = self._clean_description(best_candidate)
+            if self._is_valid_description(cleaned):
+                return cleaned
         
         # Method 2: Look for paragraphs with real content
-        for p in soup.find_all("p"):
+        for p in content_div.find_all("p"):
             text = p.get_text().strip()
             if len(text) > 50:
-                if "Reset cookie" not in text and "GDPR" not in text:
-                    return self._clean_description(text)
+                cleaned = self._clean_description(text)
+                if self._is_valid_description(cleaned):
+                    return cleaned
         
-        # Method 3: Look for any substantial text in divs
-        for div in soup.find_all("div"):
+        # Method 3: Fall back to any substantial text in divs within content
+        for div in content_div.find_all("div"):
             div_id = div.get("id", "")
             div_class = " ".join(div.get("class", []))
             
             # Skip navigation/chrome
-            skip_ids = ["header", "navbar", "subnavbar", "sidebar", "paginator", "notice", "footer"]
-            skip_classes = ["sidebar", "notice", "pagination"]
+            skip_patterns = ["header", "navbar", "subnavbar", "sidebar", "paginator", "notice", "footer", "pagination"]
             
-            if any(x in div_id.lower() for x in skip_ids):
+            if any(x in div_id.lower() for x in skip_patterns):
                 continue
-            if any(x in div_class.lower() for x in skip_classes):
+            if any(x in div_class.lower() for x in skip_patterns):
                 continue
             
-            text = div.get_text().strip()
-            if 50 < len(text) < 3000:
+            text = div.get_text(separator='\n').strip()
+            if 50 < len(text) < 5000:
                 cleaned = self._clean_description(text)
-                if "Recent Changes" not in cleaned and "Reset cookie" not in cleaned:
-                    if len(cleaned.split()) > 10:
-                        return cleaned
+                if self._is_valid_description(cleaned):
+                    return cleaned
         
         return None
+    
+    def _score_description_candidate(self, text: str) -> int:
+        """Score a text block on how likely it is to be a real description.
+        
+        Higher score = more likely to be valid description content.
+        """
+        score = 0
+        
+        # Positive signals
+        if "Tag type:" in text:  # Has the header, which means it's the main content
+            score += 20
+        if any(x in text for x in ["is a ", "are ", "refers to", "describes", "character", "series"]):
+            score += 15
+        if len(text.split('.')) >= 2:  # Has multiple sentences
+            score += 10
+        if re.search(r'\bh4\.\s*(See also|External links)', text, re.IGNORECASE):
+            score += 5  # Has wiki formatting which indicates real content
+        
+        # Length-based scoring (prefer medium-length content)
+        text_len = len(text)
+        if 100 < text_len < 500:
+            score += 15
+        elif 500 < text_len < 2000:
+            score += 10
+        elif text_len > 2000:
+            score += 5  # Might include tag dumps
+        
+        # Negative signals
+        if "Reset cookie" in text:
+            score -= 30
+        if "GDPR consent" in text:
+            score -= 30
+        if "Recent Changes" in text:
+            score -= 20
+        
+        # Heavily penalize if it looks like mostly tags
+        tag_like_words = len(re.findall(r'\b\w+_\w+_\w+\b', text))  # Words with multiple underscores
+        if tag_like_words > 20:
+            score -= 30
+        
+        return score
+    
+    def _is_valid_description(self, cleaned_text: str) -> bool:
+        """Check if cleaned text is a valid description worth saving.
+        
+        Returns False for garbage, boilerplate, or empty content.
+        """
+        if not cleaned_text:
+            return False
+        
+        # Too short to be useful
+        if len(cleaned_text) < 20:
+            return False
+        
+        # Too few words
+        word_count = len(cleaned_text.split())
+        if word_count < 5:
+            return False
+        
+        # Mostly numbers/symbols
+        alpha_chars = sum(1 for c in cleaned_text if c.isalpha())
+        if alpha_chars < len(cleaned_text) * 0.5:
+            return False
+        
+        # Known garbage patterns
+        garbage_patterns = [
+            r'^This entry is (not )?locked',
+            r'^Reset cookie',
+            r'^GDPR consent',
+            r'^Recent Changes',
+            r'^Version \d+',
+            r'^Last updated',
+            r'^There are no images',
+            r'^View more',
+            # Pure tag dumps (multiple underscore-joined words with no prose)
+            r'^(\w+_)+\w+(\s+(\w+_)+\w+){5,}$',
+        ]
+        
+        for pattern in garbage_patterns:
+            if re.match(pattern, cleaned_text, re.IGNORECASE):
+                return False
+        
+        return True
 
 # ============================================================================
 # Main Sync Logic
