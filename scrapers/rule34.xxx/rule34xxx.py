@@ -271,8 +271,10 @@ def map_to_stashapp(post_data, categorized_tags):
         result["performers"] = [{"name": f"r34:{str(char)}"} for char in categorized_tags["characters"]]
 
     # Studio from first artist
+    studio_artist = None
     if categorized_tags["artists"]:
-        result["studio"] = {"name": f"r34:{str(categorized_tags['artists'][0])}"}
+        studio_artist = categorized_tags["artists"][0]
+        result["studio"] = {"name": f"r34:{str(studio_artist)}"}
 
     # Tags - combine all types with appropriate prefixes
     all_tags = []
@@ -281,9 +283,10 @@ def map_to_stashapp(post_data, categorized_tags):
     for tag in categorized_tags["general"]:
         all_tags.append({"name": f"r34:{str(tag)}"})
 
-    # Artist tags with r34:artist: prefix
+    # Artist tags with r34:artist: prefix (excluding the one used as studio)
     for artist in categorized_tags["artists"]:
-        all_tags.append({"name": f"r34:artist:{str(artist)}"})
+        if artist != studio_artist:
+            all_tags.append({"name": f"r34:artist:{str(artist)}"})
 
     # Copyright/series tags with r34:series: prefix
     for series in categorized_tags["copyrights"]:
