@@ -24,6 +24,9 @@ settings:
   CreateMissingMovies:
     displayName: Create missing movies/groups from scrape result
     type: BOOLEAN
+  CreateMissingTags:
+    displayName: Create missing tags from scrape result
+    type: BOOLEAN
   MergeExistingTags:
     displayName: Merge existing tags with the scraped tags (default is to overwrite)
     type: BOOLEAN
