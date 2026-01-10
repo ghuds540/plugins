@@ -268,11 +268,11 @@ def map_to_stashapp(post_data, categorized_tags):
 
     # Performers from character tags
     if categorized_tags["characters"]:
-        result["performers"] = [{"name": str(char)} for char in categorized_tags["characters"]]
+        result["performers"] = [{"name": f"r34:{str(char)}"} for char in categorized_tags["characters"]]
 
     # Studio from first artist
     if categorized_tags["artists"]:
-        result["studio"] = {"name": str(categorized_tags["artists"][0])}
+        result["studio"] = {"name": f"r34:{str(categorized_tags['artists'][0])}"}
 
     # Tags - combine all types with appropriate prefixes
     all_tags = []
