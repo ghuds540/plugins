@@ -9,10 +9,10 @@ Hybrid approach:
 
 This allows proper tag categorization:
 - Characters → Performers
-- Artists → Studio + r34:artist: tags
-- Copyright → r34:series: tags
-- General → r34: tags
-- Meta → r34:meta: tags
+- Artists → Studio + artist: tags
+- Copyright → series: tags
+- General → tags
+- Meta → meta: tags
 """
 
 import json
@@ -355,25 +355,25 @@ def map_to_stashapp(post_id, metadata, categorized_tags):
 
     # General tags
     for tag in categorized_tags["general"]:
-        all_tags.append({"name": f"r34:{str(tag)}"})
+        all_tags.append({"name": str(tag)})
 
     # Artist tags
     for artist in categorized_tags["artists"]:
-        all_tags.append({"name": f"r34:artist:{str(artist)}"})
+        all_tags.append({"name": f"artist:{str(artist)}"})
 
     # Copyright/series tags
     for series in categorized_tags["copyrights"]:
-        all_tags.append({"name": f"r34:series:{str(series)}"})
+        all_tags.append({"name": f"series:{str(series)}"})
 
     # Meta tags
     for meta in categorized_tags["meta"]:
-        all_tags.append({"name": f"r34:meta:{str(meta)}"})
+        all_tags.append({"name": f"meta:{str(meta)}"})
 
     # Rating tag
     if metadata.get("rating"):
         rating_map = {"s": "safe", "q": "questionable", "e": "explicit"}
         rating = rating_map.get(metadata["rating"], metadata["rating"])
-        all_tags.append({"name": f"r34:rating:{rating}"})
+        all_tags.append({"name": f"rating:{rating}"})
 
     if all_tags:
         result["tags"] = all_tags
