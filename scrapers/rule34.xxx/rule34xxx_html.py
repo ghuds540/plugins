@@ -88,10 +88,29 @@ def extract_post_id_from_filename(file_path):
     return None
 
 def extract_md5_from_path(file_path):
-    """Extract md5 hash from filename"""
+    """
+    Extract md5 hash from filename.
+    
+    Looks for 32 hex character sequences in the filename.
+    Examples:
+        /path/to/abc123def456...32chars.jpg -> abc123def456...
+        0c0cd2945f33f59ba0f91b86a26387ff.mp4 -> 0c0cd2945f33f59ba0f91b86a26387ff
+    
+    Returns: md5 hash string (lowercase) or None
+    """
     filename = Path(file_path).stem
-    md5_hash = re.sub(r'[^a-fA-F0-9]', '', filename)
-    return md5_hash.lower()
+    
+    # First try: entire filename is exactly 32 hex characters
+    cleaned = re.sub(r'[^a-fA-F0-9]', '', filename)
+    if len(cleaned) == 32:
+        return cleaned.lower()
+    
+    # Second try: find 32 consecutive hex characters anywhere in filename
+    match = re.search(r'([a-fA-F0-9]{32})', filename)
+    if match:
+        return match.group(1).lower()
+    
+    return None
 
 def get_post_id_from_md5(md5_hash, api_key, user_id):
     """Use API to get post ID from md5 hash"""
@@ -281,12 +300,12 @@ def map_to_stashapp(post_id, metadata, categorized_tags):
 
     # Performers from characters
     if categorized_tags["characters"]:
-        result["performers"] = [{"name": char} for char in categorized_tags["characters"]]
+        result["performers"] = [{"name": str(char)} for char in categorized_tags["characters"]]
         log(f"Mapped {len(categorized_tags['characters'])} performers")
 
     # Studio from first artist
     if categorized_tags["artists"]:
-        result["studio"] = {"name": categorized_tags["artists"][0]}
+        result["studio"] = {"name": str(categorized_tags["artists"][0])}
         log(f"Mapped studio: {categorized_tags['artists'][0]}")
 
     # Tags
@@ -294,19 +313,19 @@ def map_to_stashapp(post_id, metadata, categorized_tags):
 
     # General tags
     for tag in categorized_tags["general"]:
-        all_tags.append({"name": f"r34:{tag}"})
+        all_tags.append({"name": f"r34:{str(tag)}"})
 
     # Artist tags
     for artist in categorized_tags["artists"]:
-        all_tags.append({"name": f"r34:artist:{artist}"})
+        all_tags.append({"name": f"r34:artist:{str(artist)}"})
 
     # Copyright/series tags
     for series in categorized_tags["copyrights"]:
-        all_tags.append({"name": f"r34:series:{series}"})
+        all_tags.append({"name": f"r34:series:{str(series)}"})
 
     # Meta tags
     for meta in categorized_tags["meta"]:
-        all_tags.append({"name": f"r34:meta:{meta}"})
+        all_tags.append({"name": f"r34:meta:{str(meta)}"})
 
     # Rating tag
     if metadata.get("rating"):
@@ -338,14 +357,20 @@ def main():
         log(f"Received input: {input_data}")
 
         # Extract file path from different input formats
-        file_path = input_data.get("path") or input_data.get("url")
+        file_path = None
         
-        # For sceneByFragment/imageByFragment, path is in files array
-        if not file_path and "files" in input_data and input_data["files"]:
+        # Try different input fields in order of preference
+        if "files" in input_data and input_data["files"]:
             file_path = input_data["files"][0].get("path")
+        elif "path" in input_data:
+            file_path = input_data.get("path")
+        elif "url" in input_data:
+            file_path = input_data.get("url")
+        elif "title" in input_data:
+            file_path = input_data.get("title")
         
         if not file_path:
-            log("No path provided - returning empty")
+            log("No filename/path/url/title in input - returning empty")
             print(json.dumps({}))
             return
 
@@ -357,31 +382,28 @@ def main():
             # Direct scraping from post ID - no API key needed!
             log(f"Using post ID from filename: {post_id}")
         else:
-            # Fall back to md5 lookup - requires API credentials
-            log("No post ID in filename, trying md5 lookup")
-
-            # Load credentials for API lookup
-            api_key, user_id = load_credentials()
-            if not api_key or not user_id:
-                log("ERROR: Missing API credentials (required for md5 lookup)")
-                log("TIP: Use r34_{POST_ID}_* filename format to skip API requirement")
-                # Return empty - user needs to set up credentials or rename files
-                print(json.dumps({}))
-                return
-
-            # Extract md5
+            # Try md5 hash extraction
             md5_hash = extract_md5_from_path(file_path)
-            log(f"Extracted md5: {md5_hash}")
-
-            if not md5_hash:
-                log("Could not extract md5 - returning empty")
-                print(json.dumps({}))
-                return
-
-            # Get post ID from API
-            post_id, metadata = get_post_id_from_md5(md5_hash, api_key, user_id)
-            if not post_id:
-                log("No matching post found in API - returning empty")
+            
+            if md5_hash:
+                log(f"Extracted md5: {md5_hash}")
+                
+                # Try API lookup if credentials available
+                api_key, user_id = load_credentials()
+                if api_key and user_id:
+                    log("Trying md5 lookup via API")
+                    post_id, metadata = get_post_id_from_md5(md5_hash, api_key, user_id)
+                    if not post_id:
+                        log("No matching post found in API - returning empty")
+                        print(json.dumps({}))
+                        return
+                else:
+                    log("No API credentials available for md5 lookup")
+                    log("TIP: Use r34_{POST_ID}_* filename format to skip API requirement")
+                    print(json.dumps({}))
+                    return
+            else:
+                log("Could not extract post ID or md5 from filename")
                 print(json.dumps({}))
                 return
 

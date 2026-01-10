@@ -268,30 +268,30 @@ def map_to_stashapp(post_data, categorized_tags):
 
     # Performers from character tags
     if categorized_tags["characters"]:
-        result["performers"] = [{"name": char} for char in categorized_tags["characters"]]
+        result["performers"] = [{"name": str(char)} for char in categorized_tags["characters"]]
 
     # Studio from first artist
     if categorized_tags["artists"]:
-        result["studio"] = {"name": categorized_tags["artists"][0]}
+        result["studio"] = {"name": str(categorized_tags["artists"][0])}
 
     # Tags - combine all types with appropriate prefixes
     all_tags = []
 
     # General tags with r34: prefix
     for tag in categorized_tags["general"]:
-        all_tags.append({"name": f"r34:{tag}"})
+        all_tags.append({"name": f"r34:{str(tag)}"})
 
     # Artist tags with r34:artist: prefix
     for artist in categorized_tags["artists"]:
-        all_tags.append({"name": f"r34:artist:{artist}"})
+        all_tags.append({"name": f"r34:artist:{str(artist)}"})
 
     # Copyright/series tags with r34:series: prefix
     for series in categorized_tags["copyrights"]:
-        all_tags.append({"name": f"r34:series:{series}"})
+        all_tags.append({"name": f"r34:series:{str(series)}"})
 
     # Meta tags with r34:meta: prefix
     for meta in categorized_tags["meta"]:
-        all_tags.append({"name": f"r34:meta:{meta}"})
+        all_tags.append({"name": f"r34:meta:{str(meta)}"})
 
     # Add rating as tag
     if post_data.get("rating"):
@@ -339,15 +339,20 @@ def main():
         log(f"Received input: {input_data}")
 
         # Extract file path from different input formats
-        file_path = input_data.get("path") or input_data.get("url")
+        file_path = None
         
-        # For sceneByFragment/imageByFragment, path is in files array
-        if not file_path and "files" in input_data and input_data["files"]:
+        # Try different input fields in order of preference
+        if "files" in input_data and input_data["files"]:
             file_path = input_data["files"][0].get("path")
+        elif "path" in input_data:
+            file_path = input_data.get("path")
+        elif "url" in input_data:
+            file_path = input_data.get("url")
+        elif "title" in input_data:
+            file_path = input_data.get("title")
         
         if not file_path:
-            log("No path or url provided in input")
-            # Return lookup-failed tag
+            log("No filename/path/url/title in input")
             print(json.dumps({"tags": [{"name": "r34:lookup-failed"}]}))
             return
 
