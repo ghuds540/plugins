@@ -242,7 +242,7 @@ def parse_api_response(xml_string):
         log(f"Failed to parse XML: {e}")
         return None
 
-def map_to_stashapp(post_data, categorized_tags):
+def map_to_stashapp(post_data, categorized_tags, md5_hash=None):
     """
     Map rule34.xxx post data to Stashapp scraper output format.
 
@@ -262,9 +262,11 @@ def map_to_stashapp(post_data, categorized_tags):
     if post_data.get("title"):
         result["title"] = post_data["title"]
 
-    # URL - reconstruct post URL from ID
+    # URL - reconstruct post URL from ID or provide md5 search URL
     if post_data.get("id"):
         result["url"] = f"https://rule34.xxx/index.php?page=post&s=view&id={post_data['id']}"
+    elif md5_hash:
+        result["url"] = f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"
 
     # Performers from character tags
     if categorized_tags["characters"]:
@@ -294,9 +296,6 @@ def map_to_stashapp(post_data, categorized_tags):
         rating_map = {"s": "safe", "q": "questionable", "e": "explicit"}
         rating = rating_map.get(post_data["rating"], post_data["rating"])
         all_tags.append({"name": rating})
-
-    # Add scraper success tag
-    all_tags.append({"name": "scraped"})
 
     if all_tags:
         result["tags"] = all_tags
@@ -368,14 +367,15 @@ def main():
         xml_response = query_rule34_api(md5_hash, api_key, user_id)
         if not xml_response:
             log("API query failed")
-            print(json.dumps({"tags": [{"name": "lookup-failed"}]}))
+            print(json.dumps({}))
             return
 
         # Parse response
         post_data = parse_api_response(xml_response)
         if not post_data:
-            log("No matching post found")
-            print(json.dumps({"tags": [{"name": "lookup-failed"}]}))
+            log("No matching post found - returning md5 search URL")
+            result = {"url": f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"}
+            print(json.dumps(result))
             return
 
         # Categorize tags
@@ -383,7 +383,7 @@ def main():
         log(f"Categorized tags: {categorized_tags}")
 
         # Map to Stashapp format
-        result = map_to_stashapp(post_data, categorized_tags)
+        result = map_to_stashapp(post_data, categorized_tags, md5_hash)
 
         # Output JSON to stdout
         print(json.dumps(result))

@@ -333,12 +333,15 @@ def scrape_html_tags(post_id, retry_count=3):
 
     return None  # All retries failed
 
-def map_to_stashapp(post_id, metadata, categorized_tags):
+def map_to_stashapp(post_id, metadata, categorized_tags, md5_hash=None):
     """Map scraped data to Stashapp format"""
     result = {}
 
-    # URL
-    result["url"] = f"https://rule34.xxx/index.php?page=post&s=view&id={post_id}"
+    # URL - link to specific post or md5 search
+    if post_id:
+        result["url"] = f"https://rule34.xxx/index.php?page=post&s=view&id={post_id}"
+    elif md5_hash:
+        result["url"] = f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"
 
     # Performers from characters
     if categorized_tags["characters"]:
@@ -415,6 +418,7 @@ def main():
         # Try to extract post ID from filename first (r34_* format)
         post_id = extract_post_id_from_filename(file_path)
         metadata = {}
+        md5_hash = None
 
         if post_id:
             # Direct scraping from post ID - no API key needed!
@@ -438,36 +442,44 @@ def main():
                         post_id, metadata = get_post_id_from_md5(md5_hash, api_key, user_id)
                     
                 if not post_id:
-                    log("Could not find post by md5 hash - returning empty")
-                    print(json.dumps({}))
-                    return
+                    log("Could not find post by md5 hash - will return search URL")
+                    # Don't return early - we'll provide a search URL instead
             else:
                 log("Could not extract post ID or md5 from filename")
                 print(json.dumps({}))
                 return
 
-        # Scrape HTML for categorized tags (works with or without API)
-        categorized_tags = scrape_html_tags(post_id)
+        # If we have a post_id, scrape HTML for categorized tags
+        if post_id:
+            categorized_tags = scrape_html_tags(post_id)
 
-        if categorized_tags is None:
-            # Temporary failure (rate limit, timeout, server error)
-            # Return empty result - don't pollute library with error tags
-            log("Temporary failure (rate limit or server error) - returning empty")
-            print(json.dumps({}))
-            return
-        elif categorized_tags is False:
-            # Permanent failure (404, post doesn't exist)
-            log("Post does not exist (404) - returning empty")
-            print(json.dumps({}))
-            return
-        elif not categorized_tags:
-            # Empty dict or other falsy value
-            log("No tags extracted - returning empty")
-            print(json.dumps({}))
-            return
+            if categorized_tags is None:
+                # Temporary failure (rate limit, timeout, server error)
+                # Return empty result - don't pollute library with error tags
+                log("Temporary failure (rate limit or server error) - returning empty")
+                print(json.dumps({}))
+                return
+            elif categorized_tags is False:
+                # Permanent failure (404, post doesn't exist)
+                log("Post does not exist (404) - returning empty")
+                print(json.dumps({}))
+                return
+            elif not categorized_tags:
+                # Empty dict or other falsy value
+                log("No tags extracted - returning empty")
+                print(json.dumps({}))
+                return
 
-        # Map to Stashapp format
-        result = map_to_stashapp(post_id, metadata, categorized_tags)
+            # Map to Stashapp format with full data
+            result = map_to_stashapp(post_id, metadata, categorized_tags, md5_hash)
+        elif md5_hash:
+            # No post found, but we have md5 - return just the search URL
+            log("No post found, returning md5 search URL only")
+            result = {"url": f"https://rule34.xxx/index.php?page=post&s=list&tags=md5:{md5_hash}"}
+        else:
+            log("No post_id or md5_hash available")
+            print(json.dumps({}))
+            return
 
         print(json.dumps(result))
         log("Scrape successful!")
