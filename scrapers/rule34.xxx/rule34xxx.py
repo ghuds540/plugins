@@ -299,6 +299,9 @@ def map_to_stashapp(post_data, categorized_tags):
         rating = rating_map.get(post_data["rating"], post_data["rating"])
         all_tags.append({"name": f"r34:rating:{rating}"})
 
+    # Add scraper success tag
+    all_tags.append({"name": "r34scraper:scraped"})
+
     if all_tags:
         result["tags"] = all_tags
 
