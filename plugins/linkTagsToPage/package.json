@@ -1,0 +1,20 @@
+{
+    "name": "linkTagsToPage",
+    "version": "1.0.0",
+    "main": "linkTagsToPage.js",
+    "author": "ghuds540",
+    "license": "MIT",
+    "scripts": {
+        "tsc": "tsc",
+        "compile:ts": "npm run tsc",
+        "copy:yml": "cpx \"src/linkTagsToPage.yml\" \"dist\"",
+        "compile": "npm run compile:ts",
+        "build": "npm run compile && npm run copy:yml"
+    },
+    "devDependencies": {
+        "@types/react": "^18.2.31",
+        "@types/react-dom": "^18.2.14",
+        "cpx": "^1.5.0",
+        "typescript": "^5.9.3"
+    }
+}

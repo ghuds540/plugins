@@ -1,0 +1,7 @@
+name: Link Tags To Page
+description: Overrides tag components to link to the tag page instead of a media specific search
+version: 1.0.0
+url: https://github.com/ghuds540/plugins
+ui:
+  javascript:
+    - linkTagsToPage.js

@@ -16,6 +16,23 @@ shopt -s nullglob
 rm -rf "$outdir"
 mkdir -p "$outdir"
 
+# Plugins that should only be built from their dist directory (TypeScript projects)
+# Add plugin directory names here to use dist/ as the source
+DIST_ONLY_PLUGINS=(
+    "linkTagsToPage"
+)
+
+# Check if a plugin should use dist directory
+is_dist_only_plugin() {
+    local plugin_dir=$1
+    for p in "${DIST_ONLY_PLUGINS[@]}"; do
+        if [ "$p" == "$plugin_dir" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 buildPlugin() 
 {
     f=$1
@@ -27,12 +44,27 @@ buildPlugin()
     # get the scraper id from the directory
     dir=$(dirname "$f")
     plugin_id=$(basename "$f" .yml)
+    plugin_dir_name=$(basename "$dir")
+    
+    # For dist-only plugins, skip if this yml is not in a dist directory
+    if is_dist_only_plugin "$plugin_dir_name"; then
+        if [[ "$dir" != */dist ]]; then
+            return
+        fi
+    fi
 
     echo "Processing $plugin_id"
 
+    # Determine the version source directory (parent for dist plugins, same dir otherwise)
+    if [[ "$dir" == */dist ]]; then
+        version_dir=$(dirname "$dir")
+    else
+        version_dir="$dir"
+    fi
+
     # create a directory for the version
-    version=$(git log -n 1 --pretty=format:%h -- "$dir"/*)
-    updated=$(TZ=UTC0 git log -n 1 --date="format-local:%F %T" --pretty=format:%ad -- "$dir"/*)
+    version=$(git log -n 1 --pretty=format:%h -- "$version_dir"/*)
+    updated=$(TZ=UTC0 git log -n 1 --date="format-local:%F %T" --pretty=format:%ad -- "$version_dir"/*)
     
     # create the zip file
     # copy other files
@@ -70,10 +102,11 @@ buildPlugin()
     echo "" >> "$outdir"/index.yml
 }
 
-find ./plugins -mindepth 1 -name "*.yml" | sort | while read file; do
+# Find yml files in plugins (including dist subdirectories for TypeScript projects)
+find ./plugins -mindepth 2 -name "*.yml" | sort | while read file; do
     buildPlugin "$file"
 done
-find ./themes -mindepth 1 -name "*.yml" | sort | while read file; do
+find ./themes -mindepth 2 -name "*.yml" | sort | while read file; do
     buildPlugin "$file"
 done
 
