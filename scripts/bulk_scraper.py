@@ -33,10 +33,27 @@ except ImportError:
 
 DEFAULT_STASH_URL = "http://localhost:9999"
 DEFAULT_RATE_LIMIT = 2.0  # seconds between scrape requests
+DEFAULT_RATE_LIMIT_LOCAL = 0.5  # faster rate limit for localhost
 DEFAULT_TIMEOUT = 60
+DEFAULT_TIMEOUT_LOCAL = 30  # shorter timeout for localhost
 MAX_RETRIES = 3
+MAX_RETRIES_LOCAL = 1  # fewer retries for localhost
 BACKOFF_FACTOR = 2
 BATCH_SIZE = 50  # Number of items to fetch per page
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
+def is_localhost(url: str) -> bool:
+    """Check if a URL points to localhost/local machine."""
+    from urllib.parse import urlparse
+    hostname = urlparse(url).hostname
+    if not hostname:
+        return False
+
+    localhost_names = ['localhost', '127.0.0.1', '::1', '0.0.0.0']
+    return hostname.lower() in localhost_names
 
 # ============================================================================
 # Logging Setup
@@ -171,21 +188,28 @@ class ProgressStats:
 # HTTP Session with Retry Logic
 # ============================================================================
 
-def create_session(max_retries: int = MAX_RETRIES, backoff_factor: float = BACKOFF_FACTOR) -> requests.Session:
+def create_session(max_retries: int = MAX_RETRIES, backoff_factor: float = BACKOFF_FACTOR, is_local: bool = False) -> requests.Session:
     """Create a requests session with retry logic for transient errors."""
     session = requests.Session()
 
-    status_forcelist = [
-        429,  # Too Many Requests
-        500,  # Internal Server Error
-        502,  # Bad Gateway
-        503,  # Service Unavailable
-        504,  # Gateway Timeout
-    ]
+    # For localhost, use simpler retry logic
+    if is_local:
+        status_forcelist = [
+            500,  # Internal Server Error
+            503,  # Service Unavailable
+        ]
+    else:
+        status_forcelist = [
+            429,  # Too Many Requests
+            500,  # Internal Server Error
+            502,  # Bad Gateway
+            503,  # Service Unavailable
+            504,  # Gateway Timeout
+        ]
 
     retry_strategy = Retry(
         total=max_retries,
-        backoff_factor=backoff_factor,
+        backoff_factor=backoff_factor if not is_local else 0.5,
         status_forcelist=status_forcelist,
         allowed_methods=["GET", "POST"],
         raise_on_status=False,
@@ -210,13 +234,15 @@ class StashClient:
     """Client for interacting with Stash GraphQL API."""
 
     def __init__(self, base_url: str, api_key: Optional[str], session: requests.Session,
-                 logger: logging.Logger, timeout: int = DEFAULT_TIMEOUT, timestamp_type: str = "mtime"):
+                 logger: logging.Logger, timeout: int = DEFAULT_TIMEOUT, timestamp_type: str = "mtime",
+                 need_timestamps: bool = False):
         self.base_url = base_url.rstrip("/")
         self.graphql_url = f"{self.base_url}/graphql"
         self.session = session
         self.logger = logger
         self.timeout = timeout
         self.timestamp_type = timestamp_type
+        self.need_timestamps = need_timestamps
 
         if api_key:
             self.session.headers["ApiKey"] = api_key
@@ -373,7 +399,9 @@ class StashClient:
                         checksum = fp.get("value")
                         break
 
-            file_timestamp = self._get_file_timestamp(path) if path else None
+            file_timestamp = None
+            if self.need_timestamps and path:
+                file_timestamp = self._get_file_timestamp(path)
 
             images.append(StashItem(
                 id=img["id"],
@@ -448,7 +476,9 @@ class StashClient:
                         checksum = fp.get("value")
                         break
 
-            file_timestamp = self._get_file_timestamp(path) if path else None
+            file_timestamp = None
+            if self.need_timestamps and path:
+                file_timestamp = self._get_file_timestamp(path)
 
             scenes.append(StashItem(
                 id=scene["id"],
@@ -817,6 +847,9 @@ class BulkScraper:
 
     def _wait_for_rate_limit(self):
         """Ensure we don't exceed rate limit."""
+        if self.rate_limit <= 0:
+            return
+
         elapsed = time.time() - self.last_request_time
         if elapsed < self.rate_limit:
             sleep_time = self.rate_limit - elapsed
@@ -833,7 +866,7 @@ class BulkScraper:
             return True, "already has tags"
 
         # Check if item has any of the exclusion tags
-        if self.skip_if_has_tags:
+        if self.skip_if_has_tags and item.tags:
             item_tag_names = [tag["name"].lower() for tag in item.tags]
             for skip_tag in self.skip_if_has_tags:
                 if skip_tag in item_tag_names:
@@ -880,11 +913,6 @@ class BulkScraper:
         scrapers_to_try = scrapers if self.try_all_scrapers else [primary_scraper]
 
         for scraper_index, scraper in enumerate(scrapers_to_try):
-            # Check if scraper supports fragment scraping
-            if "FRAGMENT" not in scraper.supported_scrapes:
-                self.logger.debug(f"Skipping {scraper.name} - doesn't support fragment scraping")
-                continue
-
             # Rate limit
             self._wait_for_rate_limit()
 
@@ -1109,17 +1137,25 @@ class BulkScraper:
             return results
 
         # Order scrapers - primary first, then others, generic/auto scrapers last
+        # Also filter to only include scrapers that support FRAGMENT scraping
         def is_generic_scraper(scraper: Scraper) -> bool:
             """Check if scraper is a generic/fallback type that should run last."""
             generic_keywords = ['auto', 'generic', 'fallback', 'default', 'universal']
             return any(keyword in scraper.name.lower() for keyword in generic_keywords)
+
+        # Filter to only scrapers that support fragment scraping
+        fragment_scrapers = [s for s in all_scrapers if "FRAGMENT" in s.supported_scrapes]
+
+        if not fragment_scrapers:
+            self.logger.error(f"No scrapers support FRAGMENT scraping for type {scraper_type}")
+            return results
 
         if scraper_name:
             primary_scraper = None
             specific_scrapers = []
             generic_scrapers = []
 
-            for s in all_scrapers:
+            for s in fragment_scrapers:
                 if s.name.lower() == scraper_name.lower():
                     primary_scraper = s
                 elif is_generic_scraper(s):
@@ -1128,15 +1164,15 @@ class BulkScraper:
                     specific_scrapers.append(s)
 
             if not primary_scraper:
-                self.logger.error(f"Scraper '{scraper_name}' not found. Available: {[s.name for s in all_scrapers]}")
+                self.logger.error(f"Scraper '{scraper_name}' not found or doesn't support FRAGMENT scraping. Available: {[s.name for s in fragment_scrapers]}")
                 return results
 
             # Put primary first, then specific scrapers, then generic ones last
             ordered_scrapers = [primary_scraper] + specific_scrapers + generic_scrapers
         else:
             # Separate specific and generic scrapers
-            specific_scrapers = [s for s in all_scrapers if not is_generic_scraper(s)]
-            generic_scrapers = [s for s in all_scrapers if is_generic_scraper(s)]
+            specific_scrapers = [s for s in fragment_scrapers if not is_generic_scraper(s)]
+            generic_scrapers = [s for s in fragment_scrapers if is_generic_scraper(s)]
             # Specific scrapers first, generic last
             ordered_scrapers = specific_scrapers + generic_scrapers
 
@@ -1454,8 +1490,8 @@ Examples:
     behavior_group.add_argument(
         "--rate-limit",
         type=float,
-        default=DEFAULT_RATE_LIMIT,
-        help=f"Seconds between scrape requests (default: {DEFAULT_RATE_LIMIT})"
+        default=None,
+        help=f"Seconds between scrape requests (default: {DEFAULT_RATE_LIMIT} for remote, {DEFAULT_RATE_LIMIT_LOCAL} for localhost, use 0 to disable)"
     )
     behavior_group.add_argument(
         "--timeout",
@@ -1513,6 +1549,25 @@ def main():
     # Setup logging
     logger = setup_logging(args.verbose, args.debug, args.log_file)
 
+    # Detect if connecting to localhost and apply optimized defaults
+    is_local = is_localhost(args.stash_url)
+    if is_local:
+        logger.debug("Detected localhost connection - using optimized settings")
+
+    # Apply optimized defaults for localhost if not explicitly set by user
+    if args.rate_limit is None:
+        args.rate_limit = DEFAULT_RATE_LIMIT_LOCAL if is_local else DEFAULT_RATE_LIMIT
+        if is_local:
+            logger.debug(f"Using optimized rate limit for localhost: {args.rate_limit}s")
+
+    if args.timeout == DEFAULT_TIMEOUT and is_local:
+        args.timeout = DEFAULT_TIMEOUT_LOCAL
+        logger.debug(f"Using optimized timeout for localhost: {args.timeout}s")
+
+    if args.max_retries == MAX_RETRIES and is_local:
+        args.max_retries = MAX_RETRIES_LOCAL
+        logger.debug(f"Using optimized retries for localhost: {args.max_retries}")
+
     # Parse and validate date filters
     date_since = None
     date_before = None
@@ -1558,7 +1613,7 @@ def main():
         sys.exit(1)
 
     # Create HTTP session
-    session = create_session(max_retries=args.max_retries)
+    session = create_session(max_retries=args.max_retries, is_local=is_local)
 
     # Create Stash client
     stash = StashClient(
@@ -1567,7 +1622,8 @@ def main():
         session=session,
         logger=logger,
         timeout=args.timeout,
-        timestamp_type=args.timestamp_type
+        timestamp_type=args.timestamp_type,
+        need_timestamps=bool(date_since or date_before)
     )
 
     # Test connection
@@ -1604,7 +1660,10 @@ def main():
     if not stash.test_connection():
         print("Failed to connect to Stash. Check URL and API key.")
         sys.exit(1)
-    print("✓ Connected to Stash\n")
+    print("✓ Connected to Stash")
+    if is_local:
+        print(f"  Localhost detected - optimized settings: {args.rate_limit}s rate limit, {args.max_retries} retries")
+    print()
 
     if args.dry_run:
         print("=" * 70)
