@@ -74,6 +74,17 @@ def setup_logging(verbose: bool, debug: bool, log_file: Optional[str] = None) ->
     return logger
 
 # ============================================================================
+# Date Utilities
+# ============================================================================
+
+def parse_date(date_string: str) -> datetime:
+    """Parse date string in YYYY-MM-DD format."""
+    try:
+        return datetime.strptime(date_string, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"Invalid date format '{date_string}'. Expected YYYY-MM-DD (e.g., 2024-01-15)")
+
+# ============================================================================
 # Data Classes
 # ============================================================================
 
@@ -87,6 +98,7 @@ class StashItem:
     checksum: Optional[str] = None
     tags: List[Dict[str, Any]] = field(default_factory=list)
     organized: bool = False
+    file_timestamp: Optional[datetime] = None
 
 @dataclass
 class Scraper:
@@ -198,15 +210,35 @@ class StashClient:
     """Client for interacting with Stash GraphQL API."""
 
     def __init__(self, base_url: str, api_key: Optional[str], session: requests.Session,
-                 logger: logging.Logger, timeout: int = DEFAULT_TIMEOUT):
+                 logger: logging.Logger, timeout: int = DEFAULT_TIMEOUT, timestamp_type: str = "mtime"):
         self.base_url = base_url.rstrip("/")
         self.graphql_url = f"{self.base_url}/graphql"
         self.session = session
         self.logger = logger
         self.timeout = timeout
+        self.timestamp_type = timestamp_type
 
         if api_key:
             self.session.headers["ApiKey"] = api_key
+
+    def _get_file_timestamp(self, file_path: str) -> Optional[datetime]:
+        """Get file timestamp based on configured timestamp type."""
+        try:
+            path = Path(file_path)
+            if not path.exists():
+                self.logger.debug(f"File does not exist: {file_path}")
+                return None
+
+            stat = path.stat()
+            if self.timestamp_type == "ctime":
+                timestamp = stat.st_ctime
+            else:  # mtime (default)
+                timestamp = stat.st_mtime
+
+            return datetime.fromtimestamp(timestamp)
+        except Exception as e:
+            self.logger.debug(f"Failed to get timestamp for {file_path}: {e}")
+            return None
 
     def _execute_query(self, query: str, variables: Optional[Dict] = None) -> Dict:
         """Execute a GraphQL query against Stash."""
@@ -341,6 +373,8 @@ class StashClient:
                         checksum = fp.get("value")
                         break
 
+            file_timestamp = self._get_file_timestamp(path) if path else None
+
             images.append(StashItem(
                 id=img["id"],
                 type="image",
@@ -348,7 +382,8 @@ class StashClient:
                 path=path,
                 checksum=checksum,
                 tags=img.get("tags", []),
-                organized=img.get("organized", False)
+                organized=img.get("organized", False),
+                file_timestamp=file_timestamp
             ))
 
         total_count = find_images_data.get("count", 0)
@@ -413,6 +448,8 @@ class StashClient:
                         checksum = fp.get("value")
                         break
 
+            file_timestamp = self._get_file_timestamp(path) if path else None
+
             scenes.append(StashItem(
                 id=scene["id"],
                 type="scene",
@@ -420,7 +457,8 @@ class StashClient:
                 path=path,
                 checksum=checksum,
                 tags=scene.get("tags", []),
-                organized=scene.get("organized", False)
+                organized=scene.get("organized", False),
+                file_timestamp=file_timestamp
             ))
 
         total_count = find_scenes_data.get("count", 0)
@@ -762,7 +800,8 @@ class BulkScraper:
     def __init__(self, stash_client: StashClient, logger: logging.Logger,
                  rate_limit: float = DEFAULT_RATE_LIMIT, dry_run: bool = False,
                  skip_organized: bool = False, skip_tagged: bool = False,
-                 try_all_scrapers: bool = False):
+                 try_all_scrapers: bool = False, skip_if_has_tags: Optional[List[str]] = None,
+                 date_since: Optional[datetime] = None, date_before: Optional[datetime] = None):
         self.stash = stash_client
         self.logger = logger
         self.rate_limit = rate_limit
@@ -770,6 +809,9 @@ class BulkScraper:
         self.skip_organized = skip_organized
         self.skip_tagged = skip_tagged
         self.try_all_scrapers = try_all_scrapers
+        self.skip_if_has_tags = [tag.lower() for tag in (skip_if_has_tags or [])]
+        self.date_since = date_since
+        self.date_before = date_before
         self.last_request_time = 0.0
         self.stats = ProgressStats()
 
@@ -790,8 +832,31 @@ class BulkScraper:
         if self.skip_tagged and len(item.tags) > 0:
             return True, "already has tags"
 
+        # Check if item has any of the exclusion tags
+        if self.skip_if_has_tags:
+            item_tag_names = [tag["name"].lower() for tag in item.tags]
+            for skip_tag in self.skip_if_has_tags:
+                if skip_tag in item_tag_names:
+                    return True, f"has exclusion tag: {skip_tag}"
+
         if not item.path:
             return True, "no file path"
+
+        # Check date filters
+        if self.date_since or self.date_before:
+            if not item.file_timestamp:
+                return True, "no file timestamp available"
+
+            # Apply --since filter (inclusive)
+            if self.date_since and item.file_timestamp < self.date_since:
+                return True, f"before date filter ({self.date_since.strftime('%Y-%m-%d')})"
+
+            # Apply --before filter (inclusive, need to check end of day)
+            if self.date_before:
+                # Add one day and compare (to make the date inclusive)
+                end_of_day = self.date_before + timedelta(days=1)
+                if item.file_timestamp >= end_of_day:
+                    return True, f"after date filter ({self.date_before.strftime('%Y-%m-%d')})"
 
         return False, None
 
@@ -1043,31 +1108,49 @@ class BulkScraper:
             self.logger.error(f"No scrapers found for type {scraper_type}")
             return results
 
-        # Order scrapers - primary first, then others
+        # Order scrapers - primary first, then others, generic/auto scrapers last
+        def is_generic_scraper(scraper: Scraper) -> bool:
+            """Check if scraper is a generic/fallback type that should run last."""
+            generic_keywords = ['auto', 'generic', 'fallback', 'default', 'universal']
+            return any(keyword in scraper.name.lower() for keyword in generic_keywords)
+
         if scraper_name:
             primary_scraper = None
-            other_scrapers = []
+            specific_scrapers = []
+            generic_scrapers = []
+
             for s in all_scrapers:
                 if s.name.lower() == scraper_name.lower():
                     primary_scraper = s
+                elif is_generic_scraper(s):
+                    generic_scrapers.append(s)
                 else:
-                    other_scrapers.append(s)
+                    specific_scrapers.append(s)
 
             if not primary_scraper:
                 self.logger.error(f"Scraper '{scraper_name}' not found. Available: {[s.name for s in all_scrapers]}")
                 return results
 
-            # Put primary scraper first
-            ordered_scrapers = [primary_scraper] + other_scrapers
+            # Put primary first, then specific scrapers, then generic ones last
+            ordered_scrapers = [primary_scraper] + specific_scrapers + generic_scrapers
         else:
-            # Use all scrapers in order they're listed
-            ordered_scrapers = all_scrapers
+            # Separate specific and generic scrapers
+            specific_scrapers = [s for s in all_scrapers if not is_generic_scraper(s)]
+            generic_scrapers = [s for s in all_scrapers if is_generic_scraper(s)]
+            # Specific scrapers first, generic last
+            ordered_scrapers = specific_scrapers + generic_scrapers
 
         self.logger.info(f"Primary scraper: {ordered_scrapers[0].name}")
         self.logger.info(f"Supported scrapes: {ordered_scrapers[0].supported_scrapes}")
 
         if self.try_all_scrapers and len(ordered_scrapers) > 1:
-            self.logger.info(f"Fallback scrapers enabled: {[s.name for s in ordered_scrapers[1:]]}")
+            fallback_names = [s.name for s in ordered_scrapers[1:]]
+            self.logger.info(f"Fallback scrapers enabled (in order): {fallback_names}")
+
+            # Highlight if generic scrapers are last
+            generic_fallbacks = [s.name for s in ordered_scrapers[1:] if is_generic_scraper(s)]
+            if generic_fallbacks:
+                self.logger.info(f"Generic scrapers deprioritized to end: {generic_fallbacks}")
 
         # Fetch items with pagination
         page = 1
@@ -1268,6 +1351,18 @@ Examples:
   # Scrape both images and scenes
   %(prog)s --type both --scraper "Rule34.xxx"
 
+  # Process only items added since a specific date
+  %(prog)s --type image --since 2024-01-15
+
+  # Process items added during a specific time period
+  %(prog)s --type image --between 2024-01-01 2024-01-31
+
+  # Process old items not yet scraped
+  %(prog)s --type image --before 2023-12-31 --skip-tagged
+
+  # Use creation time instead of modification time
+  %(prog)s --type image --since 2024-01-01 --timestamp-type ctime
+
   # Save detailed log to file
   %(prog)s --type image --log-file scrape.log --verbose
         """
@@ -1319,6 +1414,34 @@ Examples:
         "--skip-tagged",
         action="store_true",
         help="Skip items that already have tags"
+    )
+    filter_group.add_argument(
+        "--skip-if-has-tag",
+        action="append",
+        metavar="TAG",
+        help="Skip items that have this tag (can be used multiple times). Example: --skip-if-has-tag '[scraped]' --skip-if-has-tag 'auto-tagged'"
+    )
+    filter_group.add_argument(
+        "--timestamp-type",
+        choices=["mtime", "ctime"],
+        default="mtime",
+        help="Which file timestamp to use for date filtering: mtime (modification time, default) or ctime (creation time)"
+    )
+    filter_group.add_argument(
+        "--since",
+        metavar="YYYY-MM-DD",
+        help="Only process items added to disk on or after this date (inclusive). Example: --since 2024-01-15"
+    )
+    filter_group.add_argument(
+        "--before",
+        metavar="YYYY-MM-DD",
+        help="Only process items added to disk on or before this date (inclusive). Example: --before 2024-12-31"
+    )
+    filter_group.add_argument(
+        "--between",
+        nargs=2,
+        metavar=("START", "END"),
+        help="Only process items added between two dates (inclusive). Format: --between YYYY-MM-DD YYYY-MM-DD. Example: --between 2024-01-01 2024-01-31"
     )
 
     # Behavior
@@ -1390,6 +1513,50 @@ def main():
     # Setup logging
     logger = setup_logging(args.verbose, args.debug, args.log_file)
 
+    # Parse and validate date filters
+    date_since = None
+    date_before = None
+
+    if args.between:
+        try:
+            date_since = parse_date(args.between[0])
+            date_before = parse_date(args.between[1])
+            if date_since > date_before:
+                logger.error(f"--between start date ({args.between[0]}) must be before or equal to end date ({args.between[1]})")
+                sys.exit(1)
+        except ValueError as e:
+            logger.error(str(e))
+            sys.exit(1)
+
+    if args.since:
+        try:
+            since_date = parse_date(args.since)
+            # Combine with --between start date if both specified (AND logic)
+            if date_since:
+                date_since = max(date_since, since_date)
+            else:
+                date_since = since_date
+        except ValueError as e:
+            logger.error(str(e))
+            sys.exit(1)
+
+    if args.before:
+        try:
+            before_date = parse_date(args.before)
+            # Combine with --between end date if both specified (AND logic)
+            if date_before:
+                date_before = min(date_before, before_date)
+            else:
+                date_before = before_date
+        except ValueError as e:
+            logger.error(str(e))
+            sys.exit(1)
+
+    # Validate combined date range
+    if date_since and date_before and date_since > date_before:
+        logger.error(f"Date filter conflict: --since {date_since.strftime('%Y-%m-%d')} is after --before {date_before.strftime('%Y-%m-%d')}")
+        sys.exit(1)
+
     # Create HTTP session
     session = create_session(max_retries=args.max_retries)
 
@@ -1399,7 +1566,8 @@ def main():
         api_key=args.api_key,
         session=session,
         logger=logger,
-        timeout=args.timeout
+        timeout=args.timeout,
+        timestamp_type=args.timestamp_type
     )
 
     # Test connection
@@ -1443,6 +1611,19 @@ def main():
         print("DRY RUN MODE - No changes will be made")
         print("=" * 70 + "\n")
 
+    # Show filtering options
+    if args.skip_if_has_tag:
+        logger.info(f"Will skip items with these tags: {args.skip_if_has_tag}")
+
+    if date_since or date_before:
+        logger.info(f"Using {args.timestamp_type} for date filtering")
+        if date_since and date_before:
+            logger.info(f"Will process items from {date_since.strftime('%Y-%m-%d')} to {date_before.strftime('%Y-%m-%d')} (inclusive)")
+        elif date_since:
+            logger.info(f"Will process items since {date_since.strftime('%Y-%m-%d')} (inclusive)")
+        elif date_before:
+            logger.info(f"Will process items before {date_before.strftime('%Y-%m-%d')} (inclusive)")
+
     # Create bulk scraper
     scraper = BulkScraper(
         stash_client=stash,
@@ -1451,7 +1632,10 @@ def main():
         dry_run=args.dry_run,
         skip_organized=args.skip_organized,
         skip_tagged=args.skip_tagged,
-        try_all_scrapers=args.try_all_scrapers
+        try_all_scrapers=args.try_all_scrapers,
+        skip_if_has_tags=args.skip_if_has_tag,
+        date_since=date_since,
+        date_before=date_before
     )
 
     # Run scraping
